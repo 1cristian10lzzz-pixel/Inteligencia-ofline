@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace = "com.gameforgeai.studio"
-    compileSdk = 37
+    compileSdk = 36
 
     ndkVersion = "29.0.14206865"
 
