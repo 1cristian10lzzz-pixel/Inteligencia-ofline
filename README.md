@@ -1,31 +1,42 @@
-# GameForge AI — Android offline game studio
+# GameForge AI — estudio de creación de videojuegos Android offline
 
-**Versión de desarrollo:** 0.2.0-alpha. **Estado:** fuente preparada para compilación CI; todavía requiere la primera compilación y prueba de instalación del APK.
+**Versión:** 0.2.0-alpha. **APK debug:** compilado y publicado por GitHub Actions el 19 de noviembre de 2026.
 
-GameForge AI es una aplicación Android nativa sin permiso de Internet. Incluye una interfaz local, creación de proyectos Godot 2D/3D a partir de plantillas, almacenamiento privado de proyectos, exportación ZIP, importación de modelos GGUF y un runtime nativo `llama.cpp` preparado para compilar dentro del APK.
+GameForge AI es una aplicación Android nativa diseñada para trabajar sin servicios de IA en la nube. No declara permiso `android.permission.INTERNET`.
 
-## Funciones de esta revisión
+## Funciones incluidas
 
-- Interfaz Android local servida desde assets; no solicita `android.permission.INTERNET`.
-- Creación de proyectos Godot 4.7.x 2D y 3D a partir de plantillas incluidas.
-- Proyectos almacenados en el espacio privado de la aplicación y exportables como ZIP.
-- Importación de modelos GGUF elegidos por el usuario.
-- Runtime `llama.cpp` incorporado con CMake/NDK para `arm64-v8a` y `x86_64`.
-- Carga de modelo y generación de texto en hilo de trabajo, sin bloquear la interfaz.
-- CMake descarga una revisión fijada de `ggml-org/llama.cpp` durante la compilación; una vez construido, el runtime de la app funciona localmente.
-- La app no descarga modelos ni usa servicios de IA en la nube. El usuario aporta el GGUF y debe comprobar su licencia y compatibilidad.
+- Interfaz Android local y almacenamiento privado.
+- Motor nativo `llama.cpp` enlazado mediante JNI.
+- Importación de modelos GGUF desde el dispositivo.
+- Carga del modelo y generación de texto en un hilo de trabajo.
+- Bibliotecas nativas incluidas para `arm64-v8a` y `x86_64`.
+- Creación de proyectos Godot a partir de plantillas 2D y supervivencia 3D.
+- Exportación de proyectos fuente como ZIP.
 
-## Límites que deben probarse
+## Descargas
 
-- El APK aún no está verificado hasta que la ejecución de GitHub Actions termine y se compruebe el artefacto.
-- La inferencia está integrada a nivel C++/JNI, pero necesita probarse con un modelo GGUF compatible en el teléfono objetivo.
-- La creación de proyectos usa plantillas. El asistente neuronal puede ayudar con código e instrucciones, pero todavía no aplica cambios arbitrarios generados por el modelo directamente sobre archivos del proyecto.
-- La propia app no incluye el editor de Godot ni el exportador de los juegos; exporta los proyectos fuente para abrirlos en Godot/Godot Android Editor.
-- El runtime usa CPU portátil como configuración base. La aceleración GPU/NPU requiere una fase posterior específica por chipset.
+El APK de prueba está publicado en GitHub Actions, en el artefacto `gameforge-ai-debug-apk` de la ejecución de compilación. El archivo generado es `app-debug.apk`.
 
-## Compilación
+## Preparar el funcionamiento offline
 
-Requisitos: JDK 17, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865, CMake 3.31.6, Gradle 9.9.1 y conexión durante la compilación para obtener llama.cpp en la revisión fijada.
+1. Instala el APK.
+2. Descarga una sola vez un modelo GGUF compatible con el hardware y la RAM del teléfono (por ejemplo, una versión instruct pequeña y cuantizada).
+3. Abre la sección **IA local y dispositivo** e importa ese archivo GGUF.
+4. Carga el modelo. Una vez guardado localmente, el chat de IA no necesita conexión a internet.
+
+El modelo GGUF no va embebido en el APK para evitar que la instalación pese cientos de MB. Debes revisar la licencia del modelo que elijas. La inferencia de esta versión usa CPU; GPU/NPU todavía no están habilitadas.
+
+## Límites importantes de 0.2.0-alpha
+
+- Esta versión incluye un runtime local real de llama.cpp, pero todavía debe probarse la inferencia con un GGUF concreto en el teléfono de destino.
+- El asistente ayuda con código e instrucciones, pero aún no aplica de forma autónoma cambios arbitrarios del modelo a los archivos del proyecto.
+- La aplicación crea y exporta proyectos Godot fuente; no contiene el editor Godot ni compila todavía el APK del videojuego dentro de GameForge AI. Para editar/exportar el juego se abre el proyecto en Godot o Godot Android Editor.
+- El APK es de depuración firmado con la clave debug de CI. Es instalable para pruebas, pero no es una versión de distribución ni tiene una clave de lanzamiento permanente.
+
+## Compilación reproducible
+
+Requisitos de CI: JDK 17, Android SDK Platform 36, Build Tools 36.0.0, NDK 29.0.14206865, CMake 3.31.6 y Gradle 9.9.1. Durante el build, CMake obtiene la revisión fijada de llama.cpp.
 
 ```bash
 python3 scripts/validate_source.py
@@ -33,20 +44,13 @@ bash scripts/check-js.sh
 gradle --no-daemon -p android assembleDebug
 ```
 
-APK de depuración: `android/app/build/outputs/apk/debug/app-debug.apk`. Para reproducir builds se recomienda ejecutar `scripts/prepare-gradle-wrapper.sh` desde un entorno que ya tenga Gradle instalado.
-
-## Obtener un modelo
-
-Importa manualmente un GGUF instruct compatible desde la sección **IA local y dispositivo**. Empieza con un modelo pequeño cuantizado (aprox. 0.5B–1.5B); el tamaño adecuado depende de RAM disponible, contexto y cuantización. La app no contiene pesos de modelos.
-
-## GitHub Actions
-
-Cada push a `main` ejecuta validación estática, compila la APK con `llama.cpp`, comprueba el paquete y sus bibliotecas nativas, instala y abre el APK en un emulador Android y publica `gameforge-ai-debug-apk` como artefacto. El flujo requiere que GitHub Actions esté habilitado en el repositorio.
+Salida: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Licencias y seguridad
 
-- GameForge AI: código de este repositorio.
-- llama.cpp: proyecto externo bajo licencia MIT; se obtiene en una revisión exacta indicada en CMake.
-- Modelos GGUF: no se redistribuyen; el usuario debe comprobar los términos de la ficha del modelo elegido.
-- No se guardan tokens, contraseñas o claves privadas en el repositorio.
-- La app no ejecuta código descargado desde la red ni solicita permiso de Internet.
+- llama.cpp se incorpora bajo su licencia MIT.
+- Los modelos GGUF no se redistribuyen; revisa las licencias de sus autores.
+- No guardes claves privadas ni contraseñas en el repositorio.
+- La aplicación no solicita permiso de Internet ni requiere una API key.
+
+Consulta [BUILD_STATUS.md](BUILD_STATUS.md) y [docs/architecture.md](docs/architecture.md).
