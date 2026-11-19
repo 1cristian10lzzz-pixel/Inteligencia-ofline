@@ -1,35 +1,36 @@
 # Estado de GameForge AI 0.2.0-alpha — 19 de noviembre de 2026
 
-## Implementado en el código fuente
+## Implementado y compilado
 
 - [x] Android Gradle Plugin 9.4.0 y Gradle 9.9.1, con JDK 17.
-- [x] Android SDK Platform 37, NDK 29 y CMake 3.31.6 fijados en CI.
+- [x] Android SDK Platform 36, Build Tools 36.0.0, NDK 29 y CMake 3.31.6.
 - [x] Aplicación Android sin permiso `INTERNET`.
-- [x] Runtime llama.cpp compilado como biblioteca JNI, con la revisión upstream fijada.
-- [x] Carga de modelos GGUF desde el almacenamiento privado.
+- [x] Runtime llama.cpp compilado como biblioteca JNI.
+- [x] Carga de modelos GGUF desde almacenamiento local.
 - [x] Tokenización, plantilla conversacional, decodificación y muestreo en el dispositivo.
-- [x] Carga e inferencia fuera del hilo principal.
-- [x] Plantillas de proyecto Godot 2D y 3D, y exportación ZIP de sus fuentes.
-- [x] Interfaz que diferencia el motor nativo disponible de un modelo realmente cargado.
-- [x] CI para validar, compilar el APK, revisar bibliotecas JNI e instalar en emulador.
+- [x] Inferencia y carga fuera del hilo principal.
+- [x] Bibliotecas nativas de llama.cpp incluidas para ARM64 y x86_64.
+- [x] Plantillas Godot 2D y 3D; exportación ZIP de los proyectos fuente.
+- [x] GitHub Actions compila y verifica el APK.
+- [x] Artefacto `gameforge-ai-debug-apk` generado y descargable (19-11-2026).
 
-## Verificaciones ya realizadas localmente
+## Verificaciones
 
 - [x] `scripts/validate_source.py`.
 - [x] `scripts/check-js.sh`.
-- [x] `bash -n scripts/*.sh`.
-- [x] `python3 -m py_compile scripts/validate_source.py`.
-- [ ] Compilación real `assembleDebug` en GitHub Actions.
-- [ ] Prueba de arranque en emulador Android.
+- [x] Compilación real `assembleDebug` en GitHub Actions.
+- [x] Identificador de paquete verificado: `com.gameforgeai.studio`.
+- [x] Verificadas las bibliotecas `libllama.so`, `libggml*.so` y `libgameforge_llama.so` para ARM64 y x86_64.
+- [ ] Prueba de arranque en emulador Android (se ejecuta después de publicar el artefacto).
 - [ ] Instalación y prueba en Android físico ARM64.
-- [ ] Inferencia con un GGUF compatible y validación de uso de RAM.
+- [ ] Inferencia con un GGUF concreto y validación de RAM/rendimiento en el teléfono objetivo.
 
 ## Límites de esta alfa
 
-1. El modelo GGUF no se incluye en el APK; debe importarse por separado y sus términos de uso deben verificarse.
+1. El modelo GGUF no se incluye en el APK; se importa por separado. La IA solo responde después de que el usuario cargue un modelo compatible.
 2. El runtime usa CPU como base portátil. GPU/NPU no están habilitadas en esta versión.
-3. El agente no aplica todavía ediciones libres del modelo a los archivos Godot mediante herramientas seguras.
-4. La aplicación exporta proyectos Godot fuente; todavía no incluye el editor Godot ni construye por sí sola el APK del videojuego.
-5. El APK debug que produzca CI será instalable para pruebas, no una versión firmada de distribución.
+3. El agente todavía no puede aplicar ediciones arbitrarias generadas por el modelo a los archivos Godot mediante herramientas seguras.
+4. La aplicación exporta proyectos Godot fuente; todavía no incorpora el editor Godot ni produce automáticamente el APK del videojuego.
+5. El artefacto actual es un APK debug, útil para instalar y probar. No es una versión firmada para distribución comercial.
 
-No declarar terminado el APK hasta que CI genere el artefacto y se compruebe su instalación. No declarar terminada la inferencia hasta probar un modelo real en el dispositivo objetivo.
+No declarar terminada la inferencia hasta probar un GGUF real en el dispositivo de destino, ni declarar integrado el flujo de creación completa de videojuegos hasta implementar la edición automática y exportación Android del juego.
