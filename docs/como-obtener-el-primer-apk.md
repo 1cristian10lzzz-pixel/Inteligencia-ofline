@@ -5,7 +5,7 @@
 1. Abre **Actions** en el repositorio.
 2. Selecciona **Build GameForge AI APK**.
 3. Ejecuta `Run workflow` o realiza un push a `main`.
-4. Espera a que terminen `validate` y `build` (incluye CMake/NDK, llama.cpp y prueba en emulador).
+4. Espera a que terminen validate y build. La prueba de arranque instala la APK en un emulador Android 12, comprueba que el proceso siga activo y que la interfaz registre UI_READY.
 5. Descarga el artefacto `gameforge-ai-debug-apk` desde la ejecución completada.
 6. Extrae `app-debug.apk`, pásalo a Android y habilita instalación para esa fuente.
 
@@ -13,7 +13,7 @@ El APK es de depuración. Es instalable para pruebas, pero no es una versión fi
 
 ## Compilación local
 
-Instala JDK 17, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865, CMake 3.31.6 y Gradle 9.9.1. Con conexión durante la primera compilación para descargar las fuentes fijadas de llama.cpp:
+Instala JDK 17, Android SDK Platform 36, Build Tools 36.0.0, NDK 29.0.14206865, CMake 3.31.6 y Gradle 9.9.1. Con conexión durante la primera compilación para descargar las fuentes fijadas de llama.cpp:
 
 ```bash
 python3 scripts/validate_source.py
@@ -25,7 +25,7 @@ El APK aparecerá en `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Primera prueba en el teléfono
 
-1. Instala y abre GameForge AI.
+1. Instala y abre GameForge AI. Si aparece una pantalla nativa de diagnóstico, copia el mensaje; los registros completos se conservan en el artefacto gameforge-startup-diagnostics de GitHub Actions.
 2. Crea un proyecto 2D o 3D y exporta su ZIP de fuentes.
 3. Importa un GGUF instruct pequeño y compatible.
 4. Cárgalo desde el selector de modelos; espera la confirmación.

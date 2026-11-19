@@ -8,15 +8,23 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.graphics.Insets;
 import android.view.WindowInsetsController;
+import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 import android.app.ActivityManager;
 
@@ -46,40 +54,138 @@ public class MainActivity extends Activity {
     private static final int REQUEST_IMPORT_MODEL = 4102;
     private static final String PROJECTS_DIR = "projects";
     private String pendingExportId;
+    private static final String TAG = "GameForgeAI";
     private WebView webView;
+    private FrameLayout rootLayout;
+    private int renderRecoveryCount = 0;
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setStatusBar();
-        webView = new WebView(this);
-        webView.setBackgroundColor(Color.rgb(10, 14, 24));
-        webView.getSettings().setJavaScriptEnabled(true);
-        webView.getSettings().setDomStorageEnabled(false);
-        webView.getSettings().setAllowFileAccess(true);
-        webView.getSettings().setAllowContentAccess(false);
-        webView.getSettings().setJavaScriptCanOpenWindowsAutomatically(false);
-        webView.getSettings().setSupportMultipleWindows(false);
-        webView.addJavascriptInterface(new GameForgeBridge(), "GameForge");
-        webView.setOnApplyWindowInsetsListener((view, insets) -> {
-            if (Build.VERSION.SDK_INT >= 30) {
-                Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
-                view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+        rootLayout = new FrameLayout(this);
+        rootLayout.setBackgroundColor(Color.rgb(10, 14, 24));
+        setContentView(rootLayout);
+        openWebViewSafely();
+    }
+
+    /** Keeps the native Activity alive even if WebView cannot be created. */
+    private void openWebViewSafely() {
+        try {
+            WebView view = new WebView(this);
+            webView = view;
+            view.setBackgroundColor(Color.rgb(10, 14, 24));
+            view.getSettings().setJavaScriptEnabled(true);
+            view.getSettings().setDomStorageEnabled(true);
+            view.getSettings().setAllowFileAccess(true);
+            view.getSettings().setAllowContentAccess(false);
+            view.getSettings().setJavaScriptCanOpenWindowsAutomatically(false);
+            view.getSettings().setSupportMultipleWindows(false);
+            WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
+            view.addJavascriptInterface(new GameForgeBridge(), "GameForge");
+            view.setOnApplyWindowInsetsListener((target, insets) -> {
+                if (Build.VERSION.SDK_INT >= 30) {
+                    Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                    target.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                }
+                return insets;
+            });
+            view.setWebChromeClient(new WebChromeClient() {
+                @Override
+                public boolean onConsoleMessage(ConsoleMessage message) {
+                    if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                        Log.e(TAG, "Web UI: " + message.message() + " (línea " + message.lineNumber() + ")");
+                    }
+                    return true;
+                }
+            });
+            view.setWebViewClient(new WebViewClient() {
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView target, WebResourceRequest request) {
+                    String scheme = request.getUrl().getScheme();
+                    return !"file".equalsIgnoreCase(scheme) && !"about".equalsIgnoreCase(scheme);
+                }
+
+                @Override
+                public void onPageFinished(WebView target, String url) {
+                    super.onPageFinished(target, url);
+                    if (url != null && url.startsWith("file:///android_asset/index.html")) {
+                        target.evaluateJavascript(
+                                "document.readyState === 'complete' && !!document.getElementById('messages')",
+                                value -> {
+                                    if ("true".equals(value)) {
+                                        Log.i(TAG, "UI_READY");
+                                    } else {
+                                        Log.e(TAG, "UI_NOT_READY: documento local sin panel principal");
+                                    }
+                                });
+                    }
+                }
+
+                @Override
+                public void onReceivedError(WebView target, WebResourceRequest request, WebResourceError error) {
+                    super.onReceivedError(target, request, error);
+                    if (request != null && request.isForMainFrame()) {
+                        String description = error == null ? "Error de carga desconocido" : String.valueOf(error.getDescription());
+                        Log.e(TAG, "No se pudo cargar la interfaz local: " + description);
+                        showStartupError("No se pudo abrir la interfaz de GameForge AI", description);
+                    }
+                }
+
+                @Override
+                public boolean onRenderProcessGone(WebView target, RenderProcessGoneDetail detail) {
+                    Log.e(TAG, "El proceso de WebView terminó. Recuperable="
+                            + (detail != null && detail.didCrash()));
+                    if (rootLayout != null) rootLayout.removeView(target);
+                    target.destroy();
+                    if (webView == target) webView = null;
+
+                    if (rootLayout != null && renderRecoveryCount == 0) {
+                        renderRecoveryCount++;
+                        rootLayout.postDelayed(() -> openWebViewSafely(), 350);
+                    } else {
+                        showStartupError(
+                                "La interfaz se cerró inesperadamente",
+                                "GameForge AI intentó recuperar WebView, pero no pudo. Cierra la aplicación y vuelve a abrirla.");
+                    }
+                    return true;
+                }
+            });
+            rootLayout.addView(view, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+            view.loadUrl("file:///android_asset/index.html");
+        } catch (RuntimeException | LinkageError failure) {
+            Log.e(TAG, "Error iniciando la interfaz Android", failure);
+            showStartupError("GameForge AI no pudo iniciar su interfaz", failure.getMessage());
+        }
+    }
+
+    private void showStartupError(String title, String details) {
+        runOnUiThread(() -> {
+            TextView panel = new TextView(this);
+            panel.setText(title + "\n\n" + (details == null ? "Sin detalles adicionales." : details)
+                    + "\n\nLa aplicación no necesita Internet para abrir. Guarda este mensaje y compártelo para diagnosticar el teléfono.");
+            panel.setTextColor(Color.rgb(237, 243, 255));
+            panel.setTextSize(15);
+            panel.setGravity(Gravity.CENTER);
+            panel.setPadding(28, 28, 28, 28);
+            panel.setBackgroundColor(Color.rgb(10, 14, 24));
+            if (webView != null) {
+                webView.stopLoading();
+                webView.destroy();
+                webView = null;
             }
-            return insets;
-        });
-        if (Build.VERSION.SDK_INT >= 30) getWindow().setDecorFitsSystemWindows(false);
-        webView.setWebChromeClient(new WebChromeClient());
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                String scheme = request.getUrl().getScheme();
-                return !"file".equalsIgnoreCase(scheme) && !"about".equalsIgnoreCase(scheme);
+            if (rootLayout == null) {
+                setContentView(panel);
+            } else {
+                rootLayout.removeAllViews();
+                rootLayout.addView(panel, new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT));
             }
         });
-        setContentView(webView);
-        webView.loadUrl("file:///android_asset/index.html");
     }
 
     private void setStatusBar() {
@@ -101,7 +207,11 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         ioExecutor.shutdownNow();
-        if (webView != null) webView.destroy();
+        if (webView != null) {
+            webView.stopLoading();
+            webView.destroy();
+            webView = null;
+        }
         super.onDestroy();
     }
 
@@ -367,7 +477,7 @@ public class MainActivity extends Activity {
             File modelsDir = new File(getFilesDir(), "models");
             File[] models = modelsDir.listFiles((dir, name) -> name.toLowerCase(Locale.ROOT).endsWith(".gguf"));
             info.put("modelCount", models == null ? 0 : models.length);
-            info.put("runtime", LocalLlmRuntime.isLibraryLoaded() ? "llama_cpp_integrated" : "not_integrated");
+            info.put("runtime", "llama_cpp_integrated");
             info.put("runtimeLabel", LocalLlmRuntime.status());
             info.put("runtimeVersion", LocalLlmRuntime.version());
             info.put("modelLoaded", LocalLlmRuntime.isModelLoaded());

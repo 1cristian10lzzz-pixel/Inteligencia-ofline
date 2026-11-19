@@ -1,36 +1,38 @@
-# Estado de GameForge AI 0.2.0-alpha — 19 de noviembre de 2026
+# Estado de GameForge AI 0.3.0-alpha — fase 1 de estabilidad
 
-## Implementado y compilado
+## Fase 1 — Implementado en el código
+
+- [x] Inicialización diferida de la biblioteca llama.cpp: no se carga al abrir la pantalla.
+- [x] Carga nativa sincronizada y bajo demanda al solicitar un modelo GGUF.
+- [x] Pantalla nativa de diagnóstico si falla el inicio de WebView o el documento local.
+- [x] Recuperación controlada de una caída del renderer de WebView.
+- [x] Señal Logcat UI_READY al cargar el panel principal de la interfaz.
+- [x] Comprobación estática de seguridad del arranque.
+- [x] GitHub Actions comprueba proceso activo y carga de la interfaz en emulador Android 12 (API 31).
+- [x] GitHub Actions conserva logcat de arranque como artefacto de diagnóstico.
+- [ ] Instalación y prueba en el teléfono Android físico del usuario.
+- [ ] Prueba de inferencia con un GGUF real en ese teléfono y medición de RAM/temperatura.
+
+## Verificaciones heredadas de la versión anterior
 
 - [x] Android Gradle Plugin 9.4.0 y Gradle 9.9.1, con JDK 17.
 - [x] Android SDK Platform 36, Build Tools 36.0.0, NDK 29 y CMake 3.31.6.
-- [x] Aplicación Android sin permiso `INTERNET`.
-- [x] Runtime llama.cpp compilado como biblioteca JNI.
-- [x] Carga de modelos GGUF desde almacenamiento local.
-- [x] Tokenización, plantilla conversacional, decodificación y muestreo en el dispositivo.
-- [x] Inferencia y carga fuera del hilo principal.
-- [x] Bibliotecas nativas de llama.cpp incluidas para ARM64 y x86_64.
-- [x] Plantillas Godot 2D y 3D; exportación ZIP de los proyectos fuente.
-- [x] GitHub Actions compila y verifica el APK.
-- [x] Artefacto `gameforge-ai-debug-apk` generado y descargable (19-11-2026).
+- [x] Aplicación Android sin permiso INTERNET.
+- [x] Runtime llama.cpp y bibliotecas JNI para ARM64 y x86_64.
+- [x] Carga de GGUF, creación de proyectos Godot 2D/3D y exportación de sus fuentes.
+- [x] Pruebas estáticas y compilación de APK en GitHub Actions.
 
-## Verificaciones
+## Límites que siguen vigentes
 
-- [x] `scripts/validate_source.py`.
-- [x] `scripts/check-js.sh`.
-- [x] Compilación real `assembleDebug` en GitHub Actions.
-- [x] Identificador de paquete verificado: `com.gameforgeai.studio`.
-- [x] Verificadas las bibliotecas `libllama.so`, `libggml*.so` y `libgameforge_llama.so` para ARM64 y x86_64.
-- [ ] Prueba de arranque en emulador Android (se ejecuta después de publicar el artefacto).
-- [ ] Instalación y prueba en Android físico ARM64.
-- [ ] Inferencia con un GGUF concreto y validación de RAM/rendimiento en el teléfono objetivo.
+1. El modelo GGUF no se incluye dentro del APK; el usuario debe importarlo.
+2. La inferencia sigue en CPU; GPU/Vulkan/NPU no se han activado.
+3. La IA todavía no puede aplicar de forma autónoma cambios generales al código de un proyecto.
+4. La aplicación todavía no integra el editor/runtime exportador de Godot y no genera APK de videojuegos.
+5. El APK de esta fase sigue siendo debug; la firma release se aborda en la fase 3.
 
-## Límites de esta alfa
+## Próximas fases
 
-1. El modelo GGUF no se incluye en el APK; se importa por separado. La IA solo responde después de que el usuario cargue un modelo compatible.
-2. El runtime usa CPU como base portátil. GPU/NPU no están habilitadas en esta versión.
-3. El agente todavía no puede aplicar ediciones arbitrarias generadas por el modelo a los archivos Godot mediante herramientas seguras.
-4. La aplicación exporta proyectos Godot fuente; todavía no incorpora el editor Godot ni produce automáticamente el APK del videojuego.
-5. El artefacto actual es un APK debug, útil para instalar y probar. No es una versión firmada para distribución comercial.
+- **Fase 2:** agente de programación local, memoria de chat, herramientas seguras para archivos, diffs, restauración, validación GDScript y administrador de modelos.
+- **Fase 3:** integración real del motor Godot, recursos y mecánicas completas, pruebas y exportación de APK Android de los videojuegos.
 
-No declarar terminada la inferencia hasta probar un GGUF real en el dispositivo de destino, ni declarar integrado el flujo de creación completa de videojuegos hasta implementar la edición automática y exportación Android del juego.
+Consulta docs/ROADMAP-3-PHASES.md para objetivos y criterios de salida de las tres fases.
