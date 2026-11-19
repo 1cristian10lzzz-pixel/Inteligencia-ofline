@@ -68,7 +68,7 @@ jobs:
         uses: android-actions/setup-android@v4
       - name: Install Android SDK, NDK and CMake
         run: |
-          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0" \
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" \
             "ndk;29.0.14206865" "cmake;3.31.6"
       - name: Set up Gradle 9.9.1
         uses: gradle/actions/setup-gradle@v6
