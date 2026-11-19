@@ -25,7 +25,7 @@ require("android.permission.INTERNET" not in manifest, "La app no debe declarar 
 require('android:name=".MainActivity"' in manifest, "Falta MainActivity declarada")
 
 app_gradle = (ANDROID / "app/build.gradle.kts").read_text(encoding="utf-8")
-require("compileSdk = 37" in app_gradle, "compileSdk esperado: 37")
+require("compileSdk = 36" in app_gradle, "compileSdk esperado: 36")
 require("targetSdk = 36" in app_gradle, "targetSdk esperado: 36")
 require('version "9.4.0"' in (ANDROID / "build.gradle.kts").read_text(encoding="utf-8"), "AGP estable 9.4.0 esperado")
 require("9.9.1" in (ROOT / "scripts/prepare-gradle-wrapper.sh").read_text(encoding="utf-8"), "Gradle wrapper debe usar 9.9.1")
