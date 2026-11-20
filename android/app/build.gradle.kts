@@ -12,8 +12,8 @@ android {
         applicationId = "com.gameforgeai.studio"
         minSdk = 28
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0-alpha"
+        versionCode = 4
+        versionName = "0.4.0-alpha"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")

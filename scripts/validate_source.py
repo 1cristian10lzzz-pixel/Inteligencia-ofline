@@ -23,6 +23,9 @@ except Exception as exc:
 manifest = MANIFEST.read_text(encoding="utf-8")
 require("android.permission.INTERNET" not in manifest, "La app no debe declarar INTERNET")
 require('android:name=".MainActivity"' in manifest, "Falta MainActivity declarada")
+require('android:icon="@mipmap/ic_launcher"' in manifest, "Falta el icono de GameForge AI")
+require((ANDROID / "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml").is_file(), "Falta el icono adaptativo Android")
+require((ANDROID / "app/src/main/res/drawable/ic_launcher_foreground.xml").is_file(), "Falta el arte vectorial del icono")
 
 app_gradle = (ANDROID / "app/build.gradle.kts").read_text(encoding="utf-8")
 require("compileSdk = 36" in app_gradle, "compileSdk esperado: 36")

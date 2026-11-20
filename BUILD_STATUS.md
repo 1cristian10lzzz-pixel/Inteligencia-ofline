@@ -1,38 +1,37 @@
-# Estado de GameForge AI 0.3.0-alpha — fase 1 de estabilidad
+# Estado de GameForge AI 0.4.0-alpha — fases 1 y 2
 
-## Fase 1 — Implementado en el código
+## Fase 1 — Arranque y estabilidad
 
-- [x] Inicialización diferida de la biblioteca llama.cpp: no se carga al abrir la pantalla.
-- [x] Carga nativa sincronizada y bajo demanda al solicitar un modelo GGUF.
-- [x] Pantalla nativa de diagnóstico si falla el inicio de WebView o el documento local.
-- [x] Recuperación controlada de una caída del renderer de WebView.
-- [x] Señal Logcat UI_READY al cargar el panel principal de la interfaz.
-- [x] Comprobación estática de seguridad del arranque.
-- [x] GitHub Actions comprueba proceso activo y carga de la interfaz en emulador Android 12 (API 31).
-- [x] GitHub Actions conserva logcat de arranque como artefacto de diagnóstico.
-- [ ] Instalación y prueba en el teléfono Android físico del usuario.
-- [ ] Prueba de inferencia con un GGUF real en ese teléfono y medición de RAM/temperatura.
+- [x] Inicialización diferida de llama.cpp: no carga JNI al abrir la pantalla principal.
+- [x] Recuperación controlada de cierres del renderer WebView.
+- [x] Pantalla nativa de diagnóstico si la página local no carga.
+- [x] Señal Logcat UI_READY.
+- [x] Validación estática de arranque.
+- [x] Prueba de instalación, proceso activo y UI_READY en Android 12.
+- [x] Corrección del emulador de CI: permite TCG por software cuando el runner desactiva la aceleración de CPU.
+- [ ] Verificar la apertura en un teléfono Android físico del usuario.
 
-## Verificaciones heredadas de la versión anterior
+## Fase 2 — IA programadora offline
 
-- [x] Android Gradle Plugin 9.4.0 y Gradle 9.9.1, con JDK 17.
-- [x] Android SDK Platform 36, Build Tools 36.0.0, NDK 29 y CMake 3.31.6.
-- [x] Aplicación Android sin permiso INTERNET.
-- [x] Runtime llama.cpp y bibliotecas JNI para ARM64 y x86_64.
-- [x] Carga de GGUF, creación de proyectos Godot 2D/3D y exportación de sus fuentes.
-- [x] Pruebas estáticas y compilación de APK en GitHub Actions.
+- [x] Separar los ejecutores de importación/exportación, carga de modelos e inferencia.
+- [x] Conservar el historial reciente del chat en el almacenamiento local de WebView.
+- [x] Enviar historial limitado y contexto acotado del proyecto seleccionado al modelo.
+- [x] Añadir listado y lectura de archivos de texto del proyecto.
+- [x] Restringir extensiones, tamaño máximo y rutas canónicas para bloquear traversal.
+- [x] Implementar propuestas estructuradas de edición de un archivo por respuesta.
+- [x] Mostrar antes/después y pedir aprobación explícita.
+- [x] Comprobar que el archivo no haya cambiado desde la vista previa antes de aplicar.
+- [x] Crear copias de seguridad fuera de la carpeta del proyecto.
+- [x] Añadir deshacer del último cambio, incluso si el archivo era nuevo.
+- [x] Añadir comprobaciones estáticas de integración y seguridad para fase 2.
+- [ ] Probar generación con un GGUF real en el teléfono y validar archivos Godot reales en uso.
 
-## Límites que siguen vigentes
+## Límites vigentes
 
-1. El modelo GGUF no se incluye dentro del APK; el usuario debe importarlo.
-2. La inferencia sigue en CPU; GPU/Vulkan/NPU no se han activado.
-3. La IA todavía no puede aplicar de forma autónoma cambios generales al código de un proyecto.
-4. La aplicación todavía no integra el editor/runtime exportador de Godot y no genera APK de videojuegos.
-5. El APK de esta fase sigue siendo debug; la firma release se aborda en la fase 3.
+1. El modelo GGUF se importa manualmente y no se incluye en el APK.
+2. La inferencia sigue usando CPU; GPU/Vulkan/NPU no están habilitadas.
+3. El agente propone un archivo completo por operación, con aprobación manual; todavía no es un agente autónomo de varios pasos.
+4. No se ejecuta Godot dentro de GameForge AI ni se exportan APK de videojuegos (fase 3).
+5. Esta versión sigue siendo debug, no una versión firmada para distribución comercial.
 
-## Próximas fases
-
-- **Fase 2:** agente de programación local, memoria de chat, herramientas seguras para archivos, diffs, restauración, validación GDScript y administrador de modelos.
-- **Fase 3:** integración real del motor Godot, recursos y mecánicas completas, pruebas y exportación de APK Android de los videojuegos.
-
-Consulta docs/ROADMAP-3-PHASES.md para objetivos y criterios de salida de las tres fases.
+Consulta docs/PHASE-1-2-IMPLEMENTATION.md y docs/ROADMAP-3-PHASES.md.

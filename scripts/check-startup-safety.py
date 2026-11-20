@@ -36,6 +36,10 @@ require('android:hardwareAccelerated="true"' in MANIFEST,
 
 require("api-level: 31" in WORKFLOW,
         "La prueba de arranque debe cubrir Android 12 (API 31)")
+require('ANDROID_I_WANT_MY_TCG: "yes"' in WORKFLOW,
+        "El emulador sin aceleración debe habilitar TCG por software")
+require("emulator-boot-timeout: 1200" in WORKFLOW,
+        "La prueba debe permitir más tiempo al emulador de software")
 require("pidof com.gameforgeai.studio" in WORKFLOW and "UI_READY" in WORKFLOW,
         "CI debe comprobar proceso activo y carga real de la interfaz")
 require(not re.search(r"continue-on-error:\s*true", WORKFLOW),

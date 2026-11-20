@@ -13,6 +13,7 @@ Este plan agrupa las mejoras de la aplicación Android offline. La fase 1 es la 
 - [x] Registrar en Logcat la señal UI_READY cuando la interfaz local esté realmente cargada.
 - [x] Hacer obligatoria en CI la prueba de instalación, proceso activo y UI_READY en Android 12 (API 31).
 - [x] Guardar los registros de arranque de Android como artefacto de diagnóstico.
+- [x] Ajustar el emulador de CI para permitir TCG cuando no hay aceleración de CPU.
 - [ ] Probar la nueva APK en el teléfono físico del usuario y verificar estabilidad, memoria y ABI real.
 
 **Criterio de salida:** APK compilada, instalada y con interfaz visible en el emulador Android 12; después, confirmación en el teléfono real.
@@ -21,14 +22,14 @@ Este plan agrupa las mejoras de la aplicación Android offline. La fase 1 es la 
 
 **Objetivo:** que la IA pueda trabajar sobre los proyectos existentes, no limitarse a contestar o copiar plantillas.
 
-- Añadir memoria de conversación real y enviar el historial relevante al modelo.
+- [x] Añadir memoria local de conversación y enviar el historial relevante al modelo.
 - Incorporar respuesta progresiva por tokens, cancelación y control de tareas largas.
-- Separar colas de importación, carga de modelos, generación y exportación para que una operación no bloquee a las demás.
-- Crear herramientas locales restringidas para listar, leer y modificar archivos del proyecto.
-- Mostrar diffs antes de aplicar cambios, crear copias de seguridad y ofrecer deshacer/restaurar.
-- Implementar un agente por pasos: analizar petición, inspeccionar proyecto, planificar, editar, validar y reparar.
-- Validar sintaxis GDScript y referencias de escenas antes de guardar cambios.
-- Incorporar administrador de modelos GGUF: metadatos, compatibilidad, RAM estimada, reemplazar/eliminar modelos y mensajes útiles.
+- [x] Separar colas de carga del modelo, inferencia y tareas de importación/exportación para reducir bloqueos mutuos.
+- [x] Crear herramientas locales restringidas para listar, leer y proponer modificaciones de archivos del proyecto.
+- [x] Mostrar vista previa antes/después, crear copias de seguridad antes de aplicar y ofrecer deshacer.
+- [ ] Completar el agente por pasos de varios archivos: analizar, inspeccionar, planificar, editar, validar y reparar (queda parcialmente preparado).
+- [ ] Añadir validación real de sintaxis GDScript y referencias de escenas antes de guardar cambios.
+- [ ] Incorporar administrador avanzado de modelos GGUF: metadatos, compatibilidad, RAM estimada, reemplazar/eliminar modelos y mensajes útiles.
 - Mejorar el rendimiento con límites adaptativos de contexto/hilos y evaluar aceleración GPU/Vulkan solo cuando sea compatible con el dispositivo.
 
 **Criterio de salida:** describir una modificación y verla aplicada de forma segura a un proyecto real, con diff, validación y opción de deshacer, todo sin Internet.

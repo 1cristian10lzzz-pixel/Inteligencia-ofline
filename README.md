@@ -1,6 +1,6 @@
 # GameForge AI — estudio de creación de videojuegos Android offline
 
-**Versión:** 0.3.0-alpha. **APK debug:** compilado y publicado por GitHub Actions el 19 de noviembre de 2026.
+**Versión:** 0.4.0-alpha. **APK debug:** compilado y publicado por GitHub Actions el 19 de noviembre de 2026.
 
 GameForge AI es una aplicación Android nativa diseñada para trabajar sin servicios de IA en la nube. No declara permiso `android.permission.INTERNET`.
 
@@ -9,10 +9,17 @@ GameForge AI es una aplicación Android nativa diseñada para trabajar sin servi
 - Interfaz Android local y almacenamiento privado.
 - Motor nativo `llama.cpp` enlazado mediante JNI.
 - Importación de modelos GGUF desde el dispositivo.
-- Carga del modelo y generación de texto en un hilo de trabajo.\n- Inicialización diferida de llama.cpp para que el arranque no cargue JNI.\n- Recuperación de fallos de WebView y diagnóstico local de inicio.
+- Carga del modelo y generación de texto en un hilo de trabajo.
+- Inicialización diferida de llama.cpp para que el arranque no cargue JNI.
+- Recuperación de fallos de WebView y diagnóstico local de inicio.
 - Bibliotecas nativas incluidas para `arm64-v8a` y `x86_64`.
 - Creación de proyectos Godot a partir de plantillas 2D y supervivencia 3D.
 - Exportación de proyectos fuente como ZIP.
+- Historial local de conversación para mantener el contexto reciente.
+- Agente de código offline con contexto del proyecto seleccionado.
+- Explorador local de archivos de texto y lectura protegida.
+- Propuestas de edición con vista previa, aprobación explícita, copias de seguridad y deshacer.
+- Icono de aplicación adaptativo con un cubo voxel sobre un yunque neural.
 
 ## Descargas
 
@@ -27,10 +34,10 @@ El APK de prueba está publicado en GitHub Actions, en el artefacto `gameforge-a
 
 El modelo GGUF no va embebido en el APK para evitar que la instalación pese cientos de MB. Debes revisar la licencia del modelo que elijas. La inferencia de esta versión usa CPU; GPU/NPU todavía no están habilitadas.
 
-## Límites importantes de 0.3.0-alpha
+## Límites importantes de 0.4.0-alpha
 
 - Esta versión incluye un runtime local real de llama.cpp, pero todavía debe probarse la inferencia con un GGUF concreto en el teléfono de destino.
-- El asistente ayuda con código e instrucciones, pero aún no aplica de forma autónoma cambios arbitrarios del modelo a los archivos del proyecto.
+- El agente puede proponer una edición de un archivo de texto por operación. La propuesta requiere aprobación explícita; las rutas y extensiones están limitadas y se crea una copia de seguridad antes de aplicar el cambio.
 - La aplicación crea y exporta proyectos Godot fuente; no contiene el editor Godot ni compila todavía el APK del videojuego dentro de GameForge AI. Para editar/exportar el juego se abre el proyecto en Godot o Godot Android Editor.
 - El APK es de depuración firmado con la clave debug de CI. Es instalable para pruebas, pero no es una versión de distribución ni tiene una clave de lanzamiento permanente.
 

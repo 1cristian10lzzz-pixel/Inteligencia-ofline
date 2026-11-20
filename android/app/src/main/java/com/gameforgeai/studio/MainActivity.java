@@ -59,10 +59,14 @@ public class MainActivity extends Activity {
     private FrameLayout rootLayout;
     private int renderRecoveryCount = 0;
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService modelExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService generationExecutor = Executors.newSingleThreadExecutor();
+    private ProjectWorkspace projectWorkspace;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        projectWorkspace = new ProjectWorkspace(getFilesDir());
         setStatusBar();
         rootLayout = new FrameLayout(this);
         rootLayout.setBackgroundColor(Color.rgb(10, 14, 24));
@@ -207,6 +211,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         ioExecutor.shutdownNow();
+        generationExecutor.shutdownNow();
+        modelExecutor.shutdownNow();
         if (webView != null) {
             webView.stopLoading();
             webView.destroy();
@@ -419,7 +425,7 @@ public class MainActivity extends Activity {
             notifyModelLoaded(requestId, false, "Nombre de archivo de modelo no válido.");
             return;
         }
-        ioExecutor.execute(() -> {
+        modelExecutor.execute(() -> {
             File model = new File(new File(getFilesDir(), "models"), fileName);
             if (!model.isFile()) {
                 notifyModelLoaded(requestId, false, "No se encontró el modelo seleccionado.");
@@ -448,19 +454,30 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void askAsync(String prompt, String requestId) {
-        ioExecutor.execute(() -> {
+    private void askAsync(String prompt, String historyJson, String projectId, String requestId) {
+        generationExecutor.execute(() -> {
             JSONObject response;
             if (LocalLlmRuntime.isModelLoaded()) {
                 response = new JSONObject();
                 try {
-                    String answer = LocalLlmRuntime.generate(prompt == null ? "" : prompt, 512, 0.7f);
+                    String modelPrompt = buildAgentPrompt(prompt, historyJson, projectId);
+                    String answer = LocalLlmRuntime.generate(modelPrompt, 768, 0.7f);
                     response.put("answer", answer);
                     response.put("mode", "llama_cpp");
+                    response.put("agentProjectId", projectId == null ? "" : projectId);
                     response.put("error", answer.startsWith("Error") || answer.startsWith("No hay un modelo"));
-                } catch (JSONException ignored) { }
+                    attachEditProposal(response, answer);
+                } catch (Exception error) {
+                    try {
+                        response.put("answer", "No pude preparar la tarea del agente: " + error.getMessage());
+                        response.put("mode", "llama_cpp");
+                        response.put("error", true);
+                    } catch (JSONException ignored) { }
+                }
             } else {
                 response = askLocalRules(prompt);
+                try { response.put("agentProjectId", projectId == null ? "" : projectId); }
+                catch (JSONException ignored) { }
             }
             String id = JSONObject.quote(requestId == null ? "" : requestId);
             String payload = JSONObject.quote(response.toString());
@@ -469,6 +486,69 @@ public class MainActivity extends Activity {
                         "window.onGameForgeAnswer && window.onGameForgeAnswer(" + id + "," + payload + ")", null);
             });
         });
+    }
+
+    private String buildAgentPrompt(String prompt, String historyJson, String projectId) {
+        StringBuilder message = new StringBuilder();
+        message.append("Eres GameForge AI, un agente programador offline especializado en Godot y GDScript. ");
+        message.append("Responde en español, sé preciso y no inventes archivos ni funciones. ");
+        message.append("El usuario siempre revisa y aprueba cualquier edición antes de guardarla. ");
+        message.append("Nunca afirmes que modificaste un archivo si no has emitido una propuesta.\n\n");
+
+        if (projectId != null && projectId.matches("[a-z0-9-]{1,64}")) {
+            message.append("PROYECTO ACTIVO: ").append(projectId).append("\n");
+            message.append(projectWorkspace.buildContext(projectId)).append("\n");
+            message.append("Solo propone ediciones a rutas relativas que aparezcan en el proyecto o un archivo .gd nuevo dentro de scripts/. ");
+            message.append("Entrega el archivo completo, no un fragmento, y no superes 128 KB.\n");
+        } else {
+            message.append("No hay proyecto seleccionado. Puedes explicar, planificar o responder, pero no propongas cambios de archivos.\n");
+        }
+
+        try {
+            JSONArray history = new JSONArray(historyJson == null ? "[]" : historyJson);
+            int first = Math.max(0, history.length() - 4);
+            if (history.length() > 0) message.append("\nCONVERSACIÓN RECIENTE:\n");
+            for (int i = first; i < history.length(); i++) {
+                JSONObject item = history.optJSONObject(i);
+                if (item == null) continue;
+                String role = "user".equals(item.optString("role")) ? "Usuario" : "Asistente";
+                String content = item.optString("content", "");
+                if (content.length() > 350) content = content.substring(0, 350);
+                message.append(role).append(": ").append(content).append("\n");
+            }
+        } catch (JSONException ignored) {
+            message.append("\nNo se pudo recuperar el historial anterior.\n");
+        }
+
+        message.append("\nPETICIÓN ACTUAL:\n").append(prompt == null ? "" : prompt).append("\n\n");
+        message.append("Si hace falta cambiar un archivo y tienes suficiente contexto, termina con exactamente un bloque estructurado de este formato. ");
+        message.append("El contenido debe ser JSON válido, con saltos de línea escapados dentro de content:\n");
+        message.append("<gameforge-edit>{\"action\":\"edit_file\",\"path\":\"scripts/player.gd\",\"summary\":\"Explica brevemente el cambio\",\"content\":\"CONTENIDO COMPLETO DEL ARCHIVO\"}</gameforge-edit>\n");
+        message.append("No uses ese bloque para sugerencias hipotéticas, no generes más de un archivo por respuesta y nunca escribas contraseñas, claves ni datos personales en el proyecto.");
+        return message.toString();
+    }
+
+    private void attachEditProposal(JSONObject response, String answer) {
+        if (answer == null) return;
+        String open = "<gameforge-edit>";
+        String close = "</gameforge-edit>";
+        int start = answer.indexOf(open);
+        int end = start < 0 ? -1 : answer.indexOf(close, start + open.length());
+        if (start < 0 || end < 0) return;
+        String json = answer.substring(start + open.length(), end).trim();
+        try {
+            JSONObject proposal = new JSONObject(json);
+            if (!"edit_file".equals(proposal.optString("action"))
+                    || proposal.optString("path").trim().isEmpty()
+                    || !proposal.has("content")) return;
+            response.put("editProposal", proposal);
+            response.put("answer", (answer.substring(0, start) + answer.substring(end + close.length())).trim());
+        } catch (JSONException invalidProposal) {
+            try {
+                response.put("answer", (answer.substring(0, start) + answer.substring(end + close.length())).trim()
+                        + "\n\nLa propuesta de archivo llegó mal formada; no se ha cambiado ningún archivo.");
+            } catch (JSONException ignored) { }
+        }
     }
 
     private JSONObject runtimeStatus() {
@@ -490,6 +570,7 @@ public class MainActivity extends Activity {
             if (activityManager != null) activityManager.getMemoryInfo(memoryInfo);
             info.put("ramMb", (int) (memoryInfo.totalMem / (1024 * 1024)));
             info.put("freeStorageMb", (int) (getFilesDir().getUsableSpace() / (1024 * 1024)));
+            info.put("projectAgentTools", projectWorkspace != null);
         } catch (JSONException ignored) { }
         return info;
     }
@@ -575,9 +656,17 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String getModels() { return listModels().toString(); }
         @JavascriptInterface public String getRuntimeStatus() { return runtimeStatus().toString(); }
         @JavascriptInterface public String createProject(String name, String type, String prompt) { return MainActivity.this.createProject(name, type, prompt).toString(); }
-        @JavascriptInterface public void askAsync(String prompt, String requestId) { MainActivity.this.askAsync(prompt, requestId); }
+        @JavascriptInterface public void askAsync(String prompt, String historyJson, String projectId, String requestId) {
+            MainActivity.this.askAsync(prompt, historyJson, projectId, requestId);
+        }
         @JavascriptInterface public void loadModel(String fileName, String requestId) { loadModelAsync(fileName, requestId); }
-        @JavascriptInterface public void unloadModel() { ioExecutor.execute(LocalLlmRuntime::unloadModel); }
+        @JavascriptInterface public void unloadModel() { modelExecutor.execute(LocalLlmRuntime::unloadModel); }
+        @JavascriptInterface public String listProjectFiles(String projectId) { return projectWorkspace.listFiles(projectId).toString(); }
+        @JavascriptInterface public String readProjectFile(String projectId, String path) { return projectWorkspace.readFile(projectId, path).toString(); }
+        @JavascriptInterface public String previewProjectEdit(String projectId, String proposalJson) { return projectWorkspace.previewEdit(projectId, proposalJson).toString(); }
+        @JavascriptInterface public String applyProjectEdit(String previewId) { return projectWorkspace.applyEdit(previewId).toString(); }
+        @JavascriptInterface public String cancelProjectEdit(String previewId) { return projectWorkspace.cancelEdit(previewId).toString(); }
+        @JavascriptInterface public String undoLastProjectEdit(String projectId) { return projectWorkspace.undoLast(projectId).toString(); }
         @JavascriptInterface public void exportProject(String id) { runOnUiThread(() -> startExport(id)); }
         @JavascriptInterface public void importModel() {
             runOnUiThread(() -> {
