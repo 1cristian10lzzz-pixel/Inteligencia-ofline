@@ -67,10 +67,11 @@ public class MainActivity extends Activity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         projectWorkspace = new ProjectWorkspace(getFilesDir());
-        setStatusBar();
         rootLayout = new FrameLayout(this);
         rootLayout.setBackgroundColor(Color.rgb(10, 14, 24));
         setContentView(rootLayout);
+        // DecorView/WindowInsetsController are not guaranteed to exist before content is attached.
+        setStatusBar();
         openWebViewSafely();
     }
 
@@ -193,12 +194,34 @@ public class MainActivity extends Activity {
     }
 
     private void setStatusBar() {
-        Window window = getWindow();
-        window.setStatusBarColor(Color.rgb(10, 14, 24));
-        window.setNavigationBarColor(Color.rgb(10, 14, 24));
-        if (Build.VERSION.SDK_INT >= 30) {
-            WindowInsetsController controller = window.getInsetsController();
-            if (controller != null) controller.setSystemBarsAppearance(0, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS);
+        final Window window = getWindow();
+        if (window == null) return;
+
+        try {
+            window.setStatusBarColor(Color.rgb(10, 14, 24));
+            window.setNavigationBarColor(Color.rgb(10, 14, 24));
+
+            if (Build.VERSION.SDK_INT >= 30) {
+                // Run after setContentView: on API 30+, getInsetsController() can dereference
+                // a DecorView that has not been attached yet and crash Activity.onCreate().
+                final android.view.View decor = window.getDecorView();
+                if (decor != null) {
+                    decor.post(() -> {
+                        try {
+                            WindowInsetsController controller = window.getInsetsController();
+                            if (controller != null) {
+                                controller.setSystemBarsAppearance(
+                                        0, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS);
+                            }
+                        } catch (RuntimeException error) {
+                            Log.w(TAG, "No se pudo ajustar el aspecto de las barras del sistema", error);
+                        }
+                    });
+                }
+            }
+        } catch (RuntimeException error) {
+            // A cosmetic system-bar issue must never prevent the application from opening.
+            Log.w(TAG, "Se omitió la personalización de las barras del sistema", error);
         }
     }
 
