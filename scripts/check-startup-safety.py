@@ -9,6 +9,7 @@ RUNTIME = (JAVA / "LocalLlmRuntime.java").read_text(encoding="utf-8")
 ACTIVITY = (JAVA / "MainActivity.java").read_text(encoding="utf-8")
 MANIFEST = (ROOT / "android/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
 WORKFLOW = (ROOT / ".github/workflows/android-debug.yml").read_text(encoding="utf-8")
+SMOKE_TEST = (ROOT / "scripts/smoke-test-android.sh").read_text(encoding="utf-8")
 
 errors = []
 
@@ -40,8 +41,12 @@ require('ANDROID_I_WANT_MY_TCG: "yes"' in WORKFLOW,
         "El emulador sin aceleración debe habilitar TCG por software")
 require("emulator-boot-timeout: 1200" in WORKFLOW,
         "La prueba debe permitir más tiempo al emulador de software")
-require("pidof com.gameforgeai.studio" in WORKFLOW and "UI_READY" in WORKFLOW,
-        "CI debe comprobar proceso activo y carga real de la interfaz")
+require("script: bash scripts/smoke-test-android.sh" in WORKFLOW,
+        "El emulador debe ejecutar la prueba como un único script Bash")
+require("pidof \"$PACKAGE\"" in SMOKE_TEST and "UI_READY" in SMOKE_TEST,
+        "La prueba debe comprobar proceso activo y carga real de la interfaz")
+require("logcat -d -b all" in SMOKE_TEST and "dumpsys activity exit-info" in SMOKE_TEST,
+        "La prueba debe guardar registros de errores y diagnóstico de cierre")
 require(not re.search(r"continue-on-error:\s*true", WORKFLOW),
         "La prueba de arranque no puede ser opcional")
 
@@ -54,4 +59,4 @@ if errors:
 print("STARTUP SAFETY: OK")
 print(" - JNI llama.cpp se carga bajo demanda, no al abrir la pantalla")
 print(" - WebView se puede recuperar y los errores de carga se presentan")
-print(" - CI exige proceso activo y carga de la interfaz en Android 12")
+print(" - CI ejecuta la prueba de arranque con Bash y recoge diagnósticos del cierre")
