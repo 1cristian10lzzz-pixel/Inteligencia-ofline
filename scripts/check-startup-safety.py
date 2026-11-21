@@ -26,6 +26,11 @@ require(load_method is not None and "ensureLibraryLoaded()" in load_method.group
 require("private static synchronized boolean ensureLibraryLoaded()" in RUNTIME,
         "La inicialización nativa debe ser diferida y sincronizada")
 
+require(ACTIVITY.index("setContentView(rootLayout);") < ACTIVITY.index("setStatusBar();"),
+        "La ventana debe adjuntarse antes de consultar WindowInsetsController")
+require("decor.post(() ->" in ACTIVITY and "window.getInsetsController()" in ACTIVITY,
+        "La personalización de barras debe ejecutarse después de adjuntar DecorView")
+
 require("onRenderProcessGone" in ACTIVITY,
         "MainActivity debe recuperar una caída del proceso WebView")
 require("request.isForMainFrame()" in ACTIVITY and "onReceivedError" in ACTIVITY,
