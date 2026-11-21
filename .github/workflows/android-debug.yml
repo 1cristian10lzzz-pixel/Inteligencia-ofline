@@ -78,49 +78,16 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-boot-timeout: 1200
-          script: |
-            set -euo pipefail
-            trap 'adb logcat -d -v threadtime > startup-logcat.txt || true' EXIT
-            adb wait-for-device
-            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-            adb logcat -c
-            adb shell am force-stop com.gameforgeai.studio
-            adb shell am start -W -n com.gameforgeai.studio/.MainActivity
-
-            APP_PID=""
-            for attempt in $(seq 1 20); do
-              APP_PID="$(adb shell pidof com.gameforgeai.studio 2>/dev/null | tr -d '\r' || true)"
-              if [ -n "$APP_PID" ]; then break; fi
-              sleep 1
-            done
-            if [ -z "$APP_PID" ]; then
-              echo "FAIL: GameForge AI no mantuvo un proceso activo después de iniciar."
-              adb shell dumpsys activity activities || true
-              adb logcat -d -v threadtime | tail -n 160 || true
-              exit 1
-            fi
-
-            UI_READY=""
-            for attempt in $(seq 1 25); do
-              if adb logcat -d -s GameForgeAI:I GameForgeAI:E | grep -q "UI_READY"; then
-                UI_READY="yes"
-                break
-              fi
-              sleep 1
-            done
-            if [ -z "$UI_READY" ]; then
-              echo "FAIL: MainActivity vive, pero WebView no confirmó UI_READY."
-              adb shell dumpsys activity activities || true
-              adb logcat -d -v threadtime | tail -n 200 || true
-              exit 1
-            fi
-
-            echo "PASS: proceso Android activo (PID $APP_PID) y pantalla local UI_READY."
+          script: bash scripts/smoke-test-android.sh
       - name: Upload Android startup diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gameforge-startup-diagnostics
-          path: startup-logcat.txt
+          path: |
+            startup-logcat.txt
+            activity-dump.txt
+            exit-info.txt
+            startup-screen.png
           if-no-files-found: ignore
           retention-days: 7
