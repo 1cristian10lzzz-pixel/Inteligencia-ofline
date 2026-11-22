@@ -56,6 +56,8 @@ require("script: bash scripts/smoke-test-android.sh" in WORKFLOW,
         "El emulador debe ejecutar la prueba como un único script Bash")
 require("pidof \"$PACKAGE\"" in SMOKE_TEST and "UI_READY" in SMOKE_TEST,
         "La prueba debe comprobar proceso activo y carga real de la interfaz")
+require('adb logcat -d -s GameForgeAI:I 2>/dev/null | grep -q "UI_READY"' in SMOKE_TEST,
+        "El detector UI_READY debe aceptar mensajes informativos de éxito")
 require("Second cold start" in SMOKE_TEST and "sleep 15" in SMOKE_TEST,
         "La prueba debe verificar dos arranques en frío y estabilidad posterior")
 require("random/boot_id" in SMOKE_TEST and "sys.boot_completed" in SMOKE_TEST,
