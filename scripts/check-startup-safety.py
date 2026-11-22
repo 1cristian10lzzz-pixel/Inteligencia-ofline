@@ -42,7 +42,7 @@ require("UI_READY" in ACTIVITY and "document.getElementById('messages')" in ACTI
 require('android:hardwareAccelerated="true"' in MANIFEST,
         "La aplicación debe habilitar aceleración hardware para WebView")
 
-require("ram-size: 4096M" in WORKFLOW and "cores: 4" in WORKFLOW,
+require("ram-size: 2048M" in WORKFLOW and "cores: 2" in WORKFLOW and "target: default" in WORKFLOW,
         "El emulador Android 12 debe tener memoria y CPU suficientes para WebView")
 require("api-level: 31" in WORKFLOW,
         "La prueba de arranque debe cubrir Android 12 (API 31)")
