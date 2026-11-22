@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [ main, gameforge-minefade-phase1-2 ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
   contents: read

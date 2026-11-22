@@ -58,8 +58,8 @@ require("pidof \"$PACKAGE\"" in SMOKE_TEST and "UI_READY" in SMOKE_TEST,
         "La prueba debe comprobar proceso activo y carga real de la interfaz")
 require('adb logcat -d -s GameForgeAI:I 2>/dev/null | grep -q "UI_READY"' in SMOKE_TEST,
         "El detector UI_READY debe aceptar mensajes informativos de éxito")
-require("MODEL_READY" in SMOKE_TEST and "INFERENCE_SELF_TEST_PASS" in SMOKE_TEST,
-        "La prueba debe confirmar la carga del modelo incluido y una inferencia local real")
+require("INFERENCE_SELF_TEST_PASS" in SMOKE_TEST and "wait_for_bundled_ai" in SMOKE_TEST,
+        "La prueba debe esperar una inferencia local real del modelo incluido")
 require("Second cold start" in SMOKE_TEST and "sleep 15" in SMOKE_TEST,
         "La prueba debe verificar dos arranques en frío y estabilidad posterior")
 require("random/boot_id" in SMOKE_TEST and "sys.boot_completed" in SMOKE_TEST,
