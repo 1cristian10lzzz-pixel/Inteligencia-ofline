@@ -50,10 +50,8 @@ require("ANDROID_I_WANT_MY_TCG" not in WORKFLOW,
         "No se debe forzar emulación CPU por software")
 require("api-level: 31" in WORKFLOW,
         "La prueba de arranque debe cubrir Android 12 (API 31)")
-require('ANDROID_I_WANT_MY_TCG: "yes"' in WORKFLOW,
-        "El emulador sin aceleración debe habilitar TCG por software")
 require("emulator-boot-timeout: 1200" in WORKFLOW,
-        "La prueba debe permitir más tiempo al emulador de software")
+        "La prueba KVM debe permitir tiempo suficiente para completar el arranque")
 require("script: bash scripts/smoke-test-android.sh" in WORKFLOW,
         "El emulador debe ejecutar la prueba como un único script Bash")
 require("pidof \"$PACKAGE\"" in SMOKE_TEST and "UI_READY" in SMOKE_TEST,
