@@ -31,6 +31,8 @@ require(ACTIVITY.index("setContentView(rootLayout);") < ACTIVITY.index("setStatu
 require("decor.post(() ->" in ACTIVITY and "window.getInsetsController()" in ACTIVITY,
         "La personalización de barras debe ejecutarse después de adjuntar DecorView")
 
+require("setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)" in ACTIVITY,
+        "El renderer visible de WebView debe tener prioridad ante presión de memoria")
 require("onRenderProcessGone" in ACTIVITY,
         "MainActivity debe recuperar una caída del proceso WebView")
 require("request.isForMainFrame()" in ACTIVITY and "onReceivedError" in ACTIVITY,
@@ -40,6 +42,8 @@ require("UI_READY" in ACTIVITY and "document.getElementById('messages')" in ACTI
 require('android:hardwareAccelerated="true"' in MANIFEST,
         "La aplicación debe habilitar aceleración hardware para WebView")
 
+require("ram-size: 4096M" in WORKFLOW and "cores: 4" in WORKFLOW,
+        "El emulador Android 12 debe tener memoria y CPU suficientes para WebView")
 require("api-level: 31" in WORKFLOW,
         "La prueba de arranque debe cubrir Android 12 (API 31)")
 require('ANDROID_I_WANT_MY_TCG: "yes"' in WORKFLOW,
