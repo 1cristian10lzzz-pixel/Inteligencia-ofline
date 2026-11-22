@@ -47,8 +47,12 @@ jobs:
         uses: android-actions/setup-android@v4
       - name: Install Android SDK, NDK and CMake
         run: |
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" \
-            "ndk;29.0.14206865" "cmake;3.31.6"
+          sdkmanager "platform-tools" "platforms;android-31" "platforms;android-36" "build-tools;36.0.0" \
+            "emulator" "ndk;29.0.14206865" "cmake;3.31.6"
+      - name: Verify hardware acceleration for Android emulator
+        run: |
+          test -c /dev/kvm
+          "$ANDROID_HOME/emulator/emulator" -accel-check
       - name: Set up Gradle 9.9.1
         uses: gradle/actions/setup-gradle@v6
         with:
@@ -71,17 +75,15 @@ jobs:
       - name: Smoke test on Android 12 emulator
         timeout-minutes: 45
         uses: reactivecircus/android-emulator-runner@v2
-        env:
-          ANDROID_I_WANT_MY_TCG: "yes"
         with:
           api-level: 31
-          target: default
+          target: google_apis
           arch: x86_64
           profile: pixel_2
           cores: 4
           ram-size: 4096M
           heap-size: 1024M
-          emulator-options: -no-window -no-snapshot -noaudio -gpu swiftshader_indirect
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect -accel on
           emulator-boot-timeout: 1200
           script: bash scripts/smoke-test-android.sh
       - name: Upload Android startup diagnostics
@@ -94,5 +96,7 @@ jobs:
             activity-dump.txt
             exit-info.txt
             startup-screen.png
+            startup-meminfo.txt
+            startup-result.txt
           if-no-files-found: ignore
           retention-days: 7
