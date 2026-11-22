@@ -29,6 +29,7 @@ checks = {
     "whole-task undo checks new file hashes": "public synchronized JSONObject undoLast()" in WORKSPACE and "newHash" in WORKSPACE,
     "context is specialized for Minefade native code": "C++20" in WORKSPACE and "MFVOX001/002/003" in WORKSPACE,
     "new UI contains separated routes": all(text in HTML for text in ("data-page=\"home\"", "data-page=\"projects\"", "data-page=\"chat\"", "data-page=\"files\"", "data-page=\"repair\"", "data-page=\"settings\"")),
+    "mobile navigation exposes settings": 'data-route="settings"><b>⚙</b>Ajustes' in HTML and "grid-template-columns:repeat(6,1fr)" in HTML,
     "new UI supports per-project conversations": "localStorage" in HTML and "sessions" in HTML,
     "new UI submits prompts to local inference": "GameForge.askAsync" in HTML,
     "new UI can review and apply a batch proposal": all(text in HTML for text in ("previewProjectBatchEdit", "applyProjectBatchEdit", "cancelProjectBatchEdit")),

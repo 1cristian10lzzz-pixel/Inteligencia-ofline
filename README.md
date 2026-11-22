@@ -1,6 +1,6 @@
 # GameForge AI — estudio offline especializado en Minefade
 
-**Versión en desarrollo:** 0.5.0-alpha. Esta rama implementa las fases 1 y 2 y todavía necesita superar CI y pruebas en un teléfono Android real.
+**Versión en desarrollo:** 0.5.1-alpha. Esta rama implementa las fases 1 y 2 y todavía necesita superar CI y pruebas en un teléfono Android real.
 
 GameForge AI es una aplicación Android para trabajar con el código fuente de Minefade. Incluye un modelo GGUF de programación, una copia inicial del repositorio Minefade 2.0, memoria de conversaciones y un agente capaz de inspeccionar y proponer cambios coordinados en varios archivos. La inferencia es local y el APK no declara el permiso Android INTERNET.
 

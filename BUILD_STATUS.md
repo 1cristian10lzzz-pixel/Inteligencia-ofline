@@ -1,4 +1,4 @@
-# Estado de GameForge AI 0.5.0-alpha — fases 1 y 2 Minefade
+# Estado de GameForge AI 0.5.1-alpha — fases 1 y 2 Minefade
 
 Esta es la rama de implementación. Las casillas de código indican que la capacidad está integrada en la fuente; las casillas de validación no se marcan hasta que CI y/o un dispositivo real lo demuestren.
 
