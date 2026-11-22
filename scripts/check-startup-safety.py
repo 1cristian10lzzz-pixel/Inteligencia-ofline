@@ -42,8 +42,12 @@ require("UI_READY" in ACTIVITY and "document.getElementById('messages')" in ACTI
 require('android:hardwareAccelerated="true"' in MANIFEST,
         "La aplicación debe habilitar aceleración hardware para WebView")
 
-require("ram-size: 4096M" in WORKFLOW and "cores: 4" in WORKFLOW and "target: default" in WORKFLOW,
-        "El emulador Android 12 debe tener memoria y CPU suficientes para WebView")
+require("ram-size: 4096M" in WORKFLOW and "cores: 4" in WORKFLOW and "target: google_apis" in WORKFLOW,
+        "El emulador Android 12 debe tener recursos y la imagen Google APIs")
+require("-accel-check" in WORKFLOW and "-accel on" in WORKFLOW,
+        "La prueba Android debe usar aceleración KVM")
+require("ANDROID_I_WANT_MY_TCG" not in WORKFLOW,
+        "No se debe forzar emulación CPU por software")
 require("api-level: 31" in WORKFLOW,
         "La prueba de arranque debe cubrir Android 12 (API 31)")
 require('ANDROID_I_WANT_MY_TCG: "yes"' in WORKFLOW,
@@ -54,6 +58,10 @@ require("script: bash scripts/smoke-test-android.sh" in WORKFLOW,
         "El emulador debe ejecutar la prueba como un único script Bash")
 require("pidof \"$PACKAGE\"" in SMOKE_TEST and "UI_READY" in SMOKE_TEST,
         "La prueba debe comprobar proceso activo y carga real de la interfaz")
+require("Second cold start" in SMOKE_TEST and "sleep 15" in SMOKE_TEST,
+        "La prueba debe verificar dos arranques en frío y estabilidad posterior")
+require("random/boot_id" in SMOKE_TEST and "sys.boot_completed" in SMOKE_TEST,
+        "La prueba debe detectar reinicios del propio Android invitado")
 require("logcat -d -b all" in SMOKE_TEST and "dumpsys activity exit-info" in SMOKE_TEST,
         "La prueba debe guardar registros de errores y diagnóstico de cierre")
 require(not re.search(r"continue-on-error:\s*true", WORKFLOW),
