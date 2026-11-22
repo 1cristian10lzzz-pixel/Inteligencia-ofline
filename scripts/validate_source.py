@@ -40,6 +40,16 @@ for token in ["@JavascriptInterface", "ACTION_CREATE_DOCUMENT", "ACTION_OPEN_DOC
     require(token in main_java, f"Falta integración esperada en MainActivity: {token}")
 require("MainActivity.this.createProject" in main_java, "El puente debe delegar createProject a la Activity")
 
+studio = (ASSETS / "studio.html").read_text(encoding="utf-8")
+require((ASSETS / "studio.html").is_file(), "Falta la nueva interfaz por secciones")
+for route in ['data-page="home"', 'data-page="projects"', 'data-page="chat"', 'data-page="files"', 'data-page="repair"', 'data-page="settings"']:
+    require(route in studio, f"Falta una sección del estudio: {route}")
+require("GameForge.askAsync" in studio, "El chat del estudio debe llamar al motor local")
+require("previewProjectBatchEdit" in studio, "La UI debe permitir revisar propuestas multiarchivo")
+require("localStorage" in studio, "El historial de chats debe persistir localmente")
+require((ANDROID / "app/src/main/java/com/gameforgeai/studio/BuiltinAssetsInstaller.java").is_file(), "Falta el instalador de recursos integrados")
+require((ANDROID / "app/src/main/java/com/gameforgeai/studio/MinefadeProjectWorkspace.java").is_file(), "Falta el workspace nativo Minefade")
+
 html = (ASSETS / "index.html").read_text(encoding="utf-8")
 require("GameForge.createProject" in html, "Falta acción de creación desde la UI")
 require("GameForge.exportProject" in html, "Falta acción de exportación de proyecto")

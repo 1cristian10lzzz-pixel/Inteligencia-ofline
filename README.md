@@ -1,63 +1,51 @@
-# GameForge AI — estudio de creación de videojuegos Android offline
+# GameForge AI — estudio offline especializado en Minefade
 
-**Versión:** 0.4.0-alpha. **APK debug:** compilado y publicado por GitHub Actions el 19 de noviembre de 2026.
+**Versión en desarrollo:** 0.5.0-alpha. Esta rama implementa las fases 1 y 2 y todavía necesita superar CI y pruebas en un teléfono Android real.
 
-GameForge AI es una aplicación Android nativa diseñada para trabajar sin servicios de IA en la nube. No declara permiso `android.permission.INTERNET`.
+GameForge AI es una aplicación Android para trabajar con el código fuente de Minefade. Incluye un modelo GGUF de programación, una copia inicial del repositorio Minefade 2.0, memoria de conversaciones y un agente capaz de inspeccionar y proponer cambios coordinados en varios archivos. La inferencia es local y el APK no declara el permiso Android INTERNET.
 
-## Funciones incluidas
+## Qué incluye la rama de fases 1 y 2
 
-- Interfaz Android local y almacenamiento privado.
-- Motor nativo `llama.cpp` enlazado mediante JNI.
-- Importación de modelos GGUF desde el dispositivo.
-- Carga del modelo y generación de texto en un hilo de trabajo.
-- Inicialización diferida de llama.cpp para que el arranque no cargue JNI.
-- Recuperación de fallos de WebView y diagnóstico local de inicio.
-- Bibliotecas nativas incluidas para `arm64-v8a` y `x86_64`.
-- Creación de proyectos Godot a partir de plantillas 2D y supervivencia 3D.
-- Exportación de proyectos fuente como ZIP.
-- Historial local de conversación para mantener el contexto reciente.
-- Agente de código offline con contexto del proyecto seleccionado.
-- Explorador local de archivos de texto y lectura protegida.
-- Propuestas de edición con vista previa, aprobación explícita, copias de seguridad y deshacer.
-- Icono de aplicación adaptativo con un cubo voxel sobre un yunque neural.
+- Modelo Qwen2.5-Coder-0.5B-Instruct GGUF Q3_K_M incluido dentro del APK.
+- Instalación y carga automáticas del modelo al primer arranque. No requiere importar ni seleccionar un GGUF.
+- Snapshot de Minefade 2.0 instalado como proyecto inicial en el almacenamiento privado de GameForge AI.
+- Interfaz independiente por pantallas: Inicio, Proyectos, Chat, Archivos, Reparación y Configuración.
+- Conversaciones separadas por proyecto e historial local.
+- Índice de archivos C++, Rust, Java, Kotlin, JNI, Gradle, CMake, documentación y pruebas de Minefade.
+- Búsqueda local y lectura de archivos del proyecto.
+- Propuestas de hasta ocho archivos por tarea, vista previa antes/después, confirmación del usuario, copias de seguridad y deshacer transaccional.
+- Validación local ligera de JSON/XML y delimitadores; la compilación y los tests reales siguen siendo necesarios para confirmar los cambios.
+- Runtime llama.cpp compilado para arm64-v8a y x86_64.
 
-## Descargas
-
-El APK de prueba está publicado en GitHub Actions, en el artefacto `gameforge-ai-debug-apk` de la ejecución de compilación. El archivo generado es `app-debug.apk`.
-
-## Preparar el funcionamiento offline
+## Primer arranque
 
 1. Instala el APK.
-2. Descarga una sola vez un modelo GGUF compatible con el hardware y la RAM del teléfono (por ejemplo, una versión instruct pequeña y cuantizada).
-3. Abre la sección **IA local y dispositivo** e importa ese archivo GGUF.
-4. Carga el modelo. Una vez guardado localmente, el chat de IA no necesita conexión a internet.
+2. En el primer arranque la aplicación extrae el snapshot de Minefade y copia el GGUF incluido al almacenamiento privado.
+3. llama.cpp carga automáticamente el modelo. El estado pasa a «IA local lista» únicamente cuando el runtime confirma el modelo.
+4. Abre el proyecto Minefade y comienza un chat. No necesitas conexión a Internet ni importar archivos para conversar con la IA una vez instalada la app.
 
-El modelo GGUF no va embebido en el APK para evitar que la instalación pese cientos de MB. Debes revisar la licencia del modelo que elijas. La inferencia de esta versión usa CPU; GPU/NPU todavía no están habilitadas.
+La instalación del modelo requiere aproximadamente 355 MB para el GGUF Q3_K_M, además del espacio que ocupan los archivos privados y el propio APK. Si falta almacenamiento o RAM, la app debe mostrar un diagnóstico en vez de cerrarse.
 
-## Límites importantes de 0.4.0-alpha
+## Límites que se mantienen explícitos
 
-- Esta versión incluye un runtime local real de llama.cpp, pero todavía debe probarse la inferencia con un GGUF concreto en el teléfono de destino.
-- El agente puede proponer una edición de un archivo de texto por operación. La propuesta requiere aprobación explícita; las rutas y extensiones están limitadas y se crea una copia de seguridad antes de aplicar el cambio.
-- La aplicación crea y exporta proyectos Godot fuente; no contiene el editor Godot ni compila todavía el APK del videojuego dentro de GameForge AI. Para editar/exportar el juego se abre el proyecto en Godot o Godot Android Editor.
-- El APK es de depuración firmado con la clave debug de CI. Es instalable para pruebas, pero no es una versión de distribución ni tiene una clave de lanzamiento permanente.
+- El modelo 0.5B es pequeño para caber mejor en móviles. No tiene la capacidad de un modelo grande de ingeniería: puede equivocarse, omitir contexto o generar cambios defectuosos. La especialización también depende del contexto del repositorio y de las herramientas locales.
+- La aplicación no compila aún el APK de Minefade desde el teléfono. Eso pertenece a la fase 3; en esta rama el agente edita y organiza el código, pero no debe anunciar que ejecutó una compilación que no se haya realizado.
+- La inferencia inicial utiliza CPU; no se afirma aceleración GPU/NPU.
+- El snapshot de Minefade queda local y editable. Actualizarlo desde GitHub debe ser una acción explícita y con comparación de cambios; no debe sobrescribir trabajos locales.
+- El APK generado por CI es de depuración. No es todavía un paquete Release firmado con una clave permanente.
+- La prueba del emulador no sustituye la instalación y evaluación del APK en el teléfono físico del usuario.
 
-## Compilación reproducible
+## Compilación y validación
 
-Requisitos de CI: JDK 17, Android SDK Platform 36, Build Tools 36.0.0, NDK 29.0.14206865, CMake 3.31.6 y Gradle 9.9.1. Durante el build, CMake obtiene la revisión fijada de llama.cpp.
+El workflow prepara el modelo y el snapshot fijando sus revisiones, comprueba tamaños, manifiestos, SHA-256 y CRC del ZIP, compila la aplicación y realiza una prueba de arranque en Android 12. La prueba también espera la carga del GGUF y una inferencia de autodiagnóstico real.
 
-```bash
-python3 scripts/validate_source.py
-bash scripts/check-js.sh
-gradle --no-daemon -p android assembleDebug
-```
+El paquete GameForge AI y el APK del videojuego Minefade son entregables distintos. La automatización de la compilación del videojuego es la fase 3.
 
-Salida: `android/app/build/outputs/apk/debug/app-debug.apk`.
+## Licencias
 
-## Licencias y seguridad
+- llama.cpp / ggml: MIT.
+- Qwen2.5-Coder-0.5B-Instruct: Apache-2.0 según la tarjeta del modelo.
+- Se incluye el archivo de licencia del modelo junto al asset GGUF.
+- La copia del código Minefade conserva los avisos y referencias de las dependencias que aparecen en el repositorio fuente.
 
-- llama.cpp se incorpora bajo su licencia MIT.
-- Los modelos GGUF no se redistribuyen; revisa las licencias de sus autores.
-- No guardes claves privadas ni contraseñas en el repositorio.
-- La aplicación no solicita permiso de Internet ni requiere una API key.
-
-Consulta [BUILD_STATUS.md](BUILD_STATUS.md), [docs/architecture.md](docs/architecture.md) y [el plan de mejoras en tres fases](docs/ROADMAP-3-PHASES.md).
+Consulta BUILD_STATUS.md, docs/architecture.md y docs/PHASE-1-2-MINEFADE.md.

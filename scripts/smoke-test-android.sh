@@ -44,6 +44,22 @@ wait_for_gameforge_ui() {
     fail "Android registró una excepción fatal dentro de GameForge AI durante $phase."
   fi
 }
+wait_for_bundled_ai() {
+  local phase="$1" attempt
+  for ((attempt=0; attempt<360; attempt++)); do
+    check_emulator_unchanged
+    if adb logcat -d -s GameForgeAI:I 2>/dev/null | grep -q "INFERENCE_SELF_TEST_PASS"; then
+      echo "Bundled model and local inference passed during $phase."
+      return 0
+    fi
+    if adb logcat -d -s GameForgeAI:E 2>/dev/null | grep -q "BUNDLE_BOOTSTRAP_FAILED"; then
+      adb logcat -d -s GameForgeAI:E
+      fail "No se pudo cargar el modelo GGUF incluido durante $phase."
+    fi
+    sleep 1
+  done
+  fail "El modelo incluido no terminó de cargar y responder durante $phase."
+}
 trap capture_diagnostics EXIT
 test -s "$APK"
 adb wait-for-device
@@ -63,6 +79,7 @@ echo "Cold start: $ACTIVITY"
 START_OUTPUT="$(adb shell am start -W -n "$ACTIVITY" 2>&1)" || fail "Android rechazó MainActivity: $START_OUTPUT"
 printf '%s\n' "$START_OUTPUT"
 wait_for_gameforge_ui "el primer arranque"
+wait_for_bundled_ai "el primer arranque"
 echo "Second cold start"
 adb shell am force-stop "$PACKAGE"
 sleep 2
@@ -70,6 +87,7 @@ adb logcat -c
 START_OUTPUT="$(adb shell am start -W -n "$ACTIVITY" 2>&1)" || fail "Android rechazó el segundo inicio: $START_OUTPUT"
 printf '%s\n' "$START_OUTPUT"
 wait_for_gameforge_ui "el segundo arranque"
+wait_for_bundled_ai "el segundo arranque"
 sleep 15
 check_emulator_unchanged
 FINAL_PID="$(adb shell pidof "$PACKAGE" 2>/dev/null | tr -d '\r' || true)"
@@ -77,4 +95,4 @@ FINAL_PID="$(adb shell pidof "$PACKAGE" 2>/dev/null | tr -d '\r' || true)"
 if adb logcat -d -b crash -v threadtime 2>/dev/null | grep -q "Process: $PACKAGE"; then
   fail "Se detectó una excepción fatal durante la comprobación final."
 fi
-printf 'PASS: instalación, dos arranques en frío, interfaz UI_READY y proceso estable (PID %s).\n' "$FINAL_PID" | tee "$RESULT_FILE"
+printf 'PASS: instalación, dos arranques en frío, UI_READY, modelo incluido, inferencia local y proceso estable (PID %s).\n' "$FINAL_PID" | tee "$RESULT_FILE"
