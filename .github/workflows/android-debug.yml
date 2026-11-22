@@ -52,6 +52,7 @@ jobs:
       - name: Verify hardware acceleration for Android emulator
         run: |
           test -c /dev/kvm
+          sudo chmod 666 /dev/kvm
           "$ANDROID_HOME/emulator/emulator" -accel-check
       - name: Set up Gradle 9.9.1
         uses: gradle/actions/setup-gradle@v6
