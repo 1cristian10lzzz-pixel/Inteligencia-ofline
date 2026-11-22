@@ -16,7 +16,7 @@ checks = {
     "startup loads the dedicated studio screen": "studio.html" in ACTIVITY,
     "project and model bootstrap are started automatically": "bootstrapBundledAssetsAndModel()" in ACTIVITY,
     "built-in Minefade is installed from the APK": "builtin/minefade-source.zip" in INSTALLER,
-    "built-in model is installed without a document picker": "models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf" in INSTALLER,
+    "built-in model is installed without a document picker": "models/qwen2.5-coder-0.5b-instruct-q3_k_m.gguf" in INSTALLER,
     "model is loaded automatically after copy": "LocalLlmRuntime.loadModel" in ACTIVITY and "MODEL_READY" in ACTIVITY,
     "source workspace is specific to Minefade": "MinefadeProjectWorkspace" in ACTIVITY,
     "project root checks prevent path traversal": "getCanonicalFile()" in WORKSPACE and "startsWith(base.getPath() + File.separator)" in WORKSPACE,
