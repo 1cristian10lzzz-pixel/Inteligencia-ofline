@@ -80,6 +80,8 @@ public class MainActivity extends Activity {
         try {
             WebView view = new WebView(this);
             webView = view;
+            // Prevent Android from treating the visible WebView renderer as an empty process.
+            view.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true);
             view.setBackgroundColor(Color.rgb(10, 14, 24));
             view.getSettings().setJavaScriptEnabled(true);
             view.getSettings().setDomStorageEnabled(true);
