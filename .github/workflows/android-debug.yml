@@ -75,8 +75,13 @@ jobs:
           ANDROID_I_WANT_MY_TCG: "yes"
         with:
           api-level: 31
+          target: google_apis
           arch: x86_64
           profile: pixel_2
+          cores: 4
+          ram-size: 4096M
+          heap-size: 1024M
+          emulator-options: -no-window -no-snapshot -noaudio -gpu swiftshader_indirect
           emulator-boot-timeout: 1200
           script: bash scripts/smoke-test-android.sh
       - name: Upload Android startup diagnostics
