@@ -33,6 +33,8 @@ checks = {
     "new UI submits prompts to local inference": "GameForge.askAsync" in HTML,
     "new UI can review and apply a batch proposal": all(text in HTML for text in ("previewProjectBatchEdit", "applyProjectBatchEdit", "cancelProjectBatchEdit")),
     "model is not compressed inside APK": '"gguf"' in GRADLE and "noCompress" in GRADLE,
+    "long prompt is decoded in bounded llama.cpp batches": "kPromptBatchLimit = 256" in (ROOT / "android/app/src/main/cpp/native-lib.cpp").read_text(encoding="utf-8"),
+    "startup self-test includes a long source context": "longSelfTestPrompt" in ACTIVITY and "i < 40" in ACTIVITY,
     "CI prepares a Minefade source snapshot and local GGUF": "prepare-bundled-assets.sh" in WORKFLOW,
     "APK does not request Internet permission": "android.permission.INTERNET" not in MANIFEST,
 }

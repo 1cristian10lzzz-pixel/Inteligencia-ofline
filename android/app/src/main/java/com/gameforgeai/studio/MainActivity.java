@@ -200,7 +200,11 @@ public class MainActivity extends Activity {
                 Log.i(TAG, "MODEL_READY");
                 bootstrapStatus = "IA local lista · Minefade instalado";
                 if (BuildConfig.DEBUG) {
-                    String selfTest = LocalLlmRuntime.generate("Responde solamente con la palabra OK.", 24, 0.1f);
+                    StringBuilder longSelfTestPrompt = new StringBuilder("Comprueba el contexto largo de Minefade y responde OK. ");
+                    for (int i = 0; i < 40; i++) {
+                        longSelfTestPrompt.append("Minefade usa C++20, Rust, JNI, OpenGL ES 3, RmlUi, chunks, bloques, shaders, memoria y mundos MFVOX. ");
+                    }
+                    String selfTest = LocalLlmRuntime.generate(longSelfTestPrompt.toString(), 24, 0.1f);
                     if (selfTest == null || selfTest.trim().isEmpty()
                             || selfTest.startsWith("Error") || selfTest.startsWith("No hay un modelo")) {
                         throw new IOException("La prueba de inferencia del modelo no pasó: " + selfTest);
