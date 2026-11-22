@@ -154,17 +154,34 @@ Java_com_gameforgeai_studio_LocalLlmRuntime_nativeGenerate(JNIEnv *env, jclass, 
         llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(0.90f, 1));
         llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(temp));
         llama_sampler_chain_add(g_sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
-        llama_batch batch = llama_batch_init(static_cast<int32_t>(prompt_tokens.size()), 0, 1);
-        for (size_t i = 0; i < prompt_tokens.size(); ++i) {
-            batch.token[i] = prompt_tokens[i];
-            batch.pos[i] = static_cast<llama_pos>(i);
-            batch.n_seq_id[i] = 1;
-            batch.seq_id[i][0] = 0;
-            batch.logits[i] = (i + 1 == prompt_tokens.size()) ? 1 : 0;
+        // Prefill in bounded chunks. llama_decode cannot receive a prompt larger than n_batch.
+        // Keep the final prompt token's logits so sampling begins from the complete prompt.
+        constexpr size_t kPromptBatchLimit = 256;
+        for (size_t offset = 0; offset < prompt_tokens.size(); offset += kPromptBatchLimit) {
+            const size_t count = std::min(kPromptBatchLimit, prompt_tokens.size() - offset);
+            llama_batch batch = llama_batch_init(static_cast<int32_t>(count), 0, 1);
+            if (batch.token == nullptr || batch.pos == nullptr || batch.n_seq_id == nullptr
+                    || batch.seq_id == nullptr || batch.logits == nullptr) {
+                llama_batch_free(batch);
+                set_error("No se pudo reservar memoria para procesar el prompt del modelo.");
+                return env->NewStringUTF(g_last_error.c_str());
+            }
+            for (size_t i = 0; i < count; ++i) {
+                const size_t tokenIndex = offset + i;
+                batch.token[i] = prompt_tokens[tokenIndex];
+                batch.pos[i] = static_cast<llama_pos>(tokenIndex);
+                batch.n_seq_id[i] = 1;
+                batch.seq_id[i][0] = 0;
+                batch.logits[i] = (tokenIndex + 1 == prompt_tokens.size()) ? 1 : 0;
+            }
+            const int32_t prompt_result = llama_decode(g_context, batch);
+            llama_batch_free(batch);
+            if (prompt_result != 0) {
+                set_error("Falló el procesamiento inicial del modelo en el bloque de tokens "
+                          + std::to_string(offset) + ".");
+                return env->NewStringUTF(g_last_error.c_str());
+            }
         }
-        const int32_t prompt_result = llama_decode(g_context, batch);
-        llama_batch_free(batch);
-        if (prompt_result != 0) { set_error("Falló el procesamiento inicial del modelo."); return env->NewStringUTF(g_last_error.c_str()); }
 
         const int limit = std::clamp(static_cast<int>(max_tokens), 16, 768);
         std::string output;
