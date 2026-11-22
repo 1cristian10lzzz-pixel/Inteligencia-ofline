@@ -78,9 +78,9 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_2
-          cores: 2
-          ram-size: 2048M
-          heap-size: 512M
+          cores: 4
+          ram-size: 4096M
+          heap-size: 1024M
           emulator-options: -no-window -no-snapshot -noaudio -gpu swiftshader_indirect
           emulator-boot-timeout: 1200
           script: bash scripts/smoke-test-android.sh
