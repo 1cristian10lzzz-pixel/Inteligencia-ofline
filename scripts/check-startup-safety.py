@@ -44,7 +44,7 @@ require('android:hardwareAccelerated="true"' in MANIFEST,
 
 require("ram-size: 4096M" in WORKFLOW and "cores: 4" in WORKFLOW and "target: google_apis" in WORKFLOW,
         "El emulador Android 12 debe tener recursos y la imagen Google APIs")
-require("-accel-check" in WORKFLOW and "-accel on" in WORKFLOW,
+require("sudo chmod 666 /dev/kvm" in WORKFLOW and "-accel-check" in WORKFLOW and "-accel on" in WORKFLOW,
         "La prueba Android debe usar aceleración KVM")
 require("ANDROID_I_WANT_MY_TCG" not in WORKFLOW,
         "No se debe forzar emulación CPU por software")
