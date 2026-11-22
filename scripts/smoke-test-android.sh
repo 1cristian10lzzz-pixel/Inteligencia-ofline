@@ -33,7 +33,7 @@ wait_for_gameforge_ui() {
   for ((attempt=0; attempt<90; attempt++)); do
     check_emulator_unchanged
     pid="$(adb shell pidof "$PACKAGE" 2>/dev/null | tr -d '\r' || true)"
-    if [[ -n "$pid" ]] && adb logcat -d -s GameForgeAI:I GameForgeAI:E 2>/dev/null | grep -q "UI_READY"; then
+    if [[ -n "$pid" ]] && adb logcat -d -s GameForgeAI:I 2>/dev/null | grep -q "UI_READY"; then
       ready="yes"; break
     fi
     sleep 1
