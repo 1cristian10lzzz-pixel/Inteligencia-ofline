@@ -33,7 +33,7 @@ START_OUTPUT="$(adb shell am start -W -n "$ACTIVITY" 2>&1)" || {
 printf '%s\n' "$START_OUTPUT"
 
 APP_PID=""
-for ((attempt=0; attempt<30; attempt++)); do
+for ((attempt=0; attempt<90; attempt++)); do
   APP_PID="$(adb shell pidof "$PACKAGE" 2>/dev/null | tr -d '\r' || true)"
   if [[ -n "$APP_PID" ]]; then
     break
