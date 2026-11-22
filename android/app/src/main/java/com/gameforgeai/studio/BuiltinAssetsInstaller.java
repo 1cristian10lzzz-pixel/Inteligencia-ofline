@@ -108,7 +108,9 @@ public final class BuiltinAssetsInstaller {
             project.put("sourceRepository", bundle.optString("repository"));
             project.put("sourceCommit", bundle.optString("commit"));
             project.put("sourceVersion", bundle.optString("version"));
-            writeSynced(marker, project.toString(2));
+            // Write the marker inside the staging directory before the atomic install.
+            File temporaryMarker = new File(temporary, "gameforge-project.json");
+            writeSynced(temporaryMarker, project.toString(2));
             try {
                 Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE);
             } catch (IOException unsupportedAtomicMove) {
