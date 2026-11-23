@@ -13,6 +13,8 @@ public final class LocalLlmRuntime {
     private static native boolean nativeIsModelLoaded();
     private static native String nativeLastError();
     private static native String nativeGenerate(String prompt, int maxTokens, float temperature);
+    private static native void nativeCancelGeneration();
+    private static native boolean nativeWasGenerationCancelled();
     private static native void nativeUnloadModel();
 
     /** Initializes llama.cpp once on the caller's worker thread, never in class startup. */
@@ -87,6 +89,18 @@ public final class LocalLlmRuntime {
         if (!isModelLoaded()) return "No hay un modelo GGUF cargado.";
         try { return nativeGenerate(prompt, maxTokens, temperature); }
         catch (LinkageError | RuntimeException error) { return "Error de inferencia nativa: " + error.getMessage(); }
+    }
+
+    public static void cancelGeneration() {
+        if (!libraryLoaded) return;
+        try { nativeCancelGeneration(); }
+        catch (LinkageError | RuntimeException ignored) { }
+    }
+
+    public static boolean wasLastGenerationCancelled() {
+        if (!libraryLoaded) return false;
+        try { return nativeWasGenerationCancelled(); }
+        catch (LinkageError | RuntimeException error) { return false; }
     }
 
     public static void unloadModel() {

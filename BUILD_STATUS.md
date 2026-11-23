@@ -1,44 +1,53 @@
-# Estado de GameForge AI 0.5.1-alpha — fases 1 y 2 Minefade
+# Estado de GameForge AI 0.6.0-alpha
 
-Esta es la rama de implementación. Las casillas de código indican que la capacidad está integrada en la fuente; las casillas de validación no se marcan hasta que CI y/o un dispositivo real lo demuestren.
+Esta versión reconstruye el estudio y fortalece la ejecución offline y el agente Minefade. Las casillas describen código integrado; las pruebas de CI y dispositivo se marcan por separado.
 
-## Fase 1 — App preparada y modelo incluido
+## Fase 1 — Aplicación e IA local
 
-- [x] Nueva interfaz de estudio con pantallas Inicio, Proyectos, Chat, Archivos, Reparación y Configuración.
-- [x] Historial local de conversaciones separado por proyecto.
-- [x] Snapshot Minefade fijado a commit y empaquetado durante CI.
-- [x] Instalación segura del snapshot en almacenamiento privado en primer arranque.
-- [x] GGUF Qwen2.5-Coder-0.5B-Instruct Q3_K_M preparado para incluirse en el APK.
-- [x] Copia automática del GGUF al almacenamiento privado; no se necesita selector ni importación manual.
-- [x] Carga automática llama.cpp en un ejecutor de trabajo, con contexto e hilos configurados por memoria.
-- [x] Diagnóstico explícito para errores de extracción, espacio, memoria o carga del modelo.
-- [x] INTERNET sigue ausente del AndroidManifest.
-- [ ] Confirmar descarga del modelo y snapshot en el runner CI.
-- [ ] Compilar el APK con los dos assets incluidos.
-- [ ] Probar dos arranques en frío, carga GGUF e inferencia real en Android 12 emulator.
-- [ ] Probar instalación, memoria, velocidad y calentamiento en teléfono físico.
+- [x] Modelo Qwen2.5-Coder-0.5B-Instruct Q3_K_M incluido en el APK.
+- [x] Instalación automática del modelo y del snapshot de Minefade.
+- [x] Verificación SHA-256 del modelo instalado contra su manifiesto.
+- [x] Carga de llama.cpp en segundo plano y configuración automática de contexto/hilos según RAM disponible.
+- [x] Diagnósticos de RAM, almacenamiento, runtime, proyecto y estado de carga.
+- [x] Cancelación de una generación en curso a través de JNI.
+- [x] Interfaz reorganizada en Inicio, Proyectos, Conversaciones, Agente, Código, Tareas, Compilación y Configuración.
+- [x] Historial local persistente, separado por proyecto.
+- [x] Estado de fase 3 explícito: el centro de compilación no simula una construcción del videojuego.
+- [x] Sin permiso INTERNET en el APK.
+- [ ] Repetir CI de 0.6.0: descarga, hashes, compilación, contenido del APK y Android 12.
+- [ ] Validar memoria, velocidad, temperatura y consumo en teléfono físico.
 
-## Fase 2 — Agente programador especializado en Minefade
+## Fase 2 — Agente de ingeniería Minefade
 
-- [x] Proyecto Minefade 2.0 como proyecto predeterminado de la aplicación.
-- [x] Workspace nativo dedicado; no confunde Minefade con plantillas Godot.
-- [x] Mapa de arquitectura y contexto dirigido por tema.
-- [x] Listado, lectura y búsqueda de fuentes de Minefade.
-- [x] Limitar rutas canónicas y tipos de archivo editables.
-- [x] Proteger credenciales, keystores, manifiestos de proyecto y workflows.
-- [x] Propuestas multiarchivo de hasta ocho archivos en una sola transacción.
-- [x] Comparación antes/después y aprobación explícita.
-- [x] Comprobación de hashes antes de aplicar para evitar sobrescribir ediciones concurrentes.
-- [x] Escrituras atómicas, copias de seguridad fuera del proyecto y rollback si falla una operación.
-- [x] Deshacer la última tarea completa sin sobrescribir archivos que cambiaron después.
-- [x] Comprobación estructural ligera de JSON/XML y delimitadores.
-- [ ] Confirmar CI de integración, compilación y prueba de arranque.
-- [ ] Probar con tareas reales de reparación de C++, Rust y Android y revisar la calidad de las propuestas.
+- [x] Proyecto Minefade integrado y contexto dirigido por subsistema.
+- [x] Explorador de fuentes, búsqueda local y lectura de archivos.
+- [x] Instrucciones del runtime nativo neutrales; la especialización Minefade proviene del prompt del agente, no de un sesgo hacia Godot.
+- [x] Propuestas multiarchivo de hasta 12 archivos.
+- [x] Parches exactos find/replace para archivos existentes, con rechazo de coincidencias ambiguas y límite de parches por archivo.
+- [x] Archivos nuevos permitidos solo en ubicaciones y tipos aprobados.
+- [x] Vista previa antes/después, validación estructural y aprobación explícita.
+- [x] Comprobación de SHA-256 para detectar cambios concurrentes.
+- [x] Escrituras atómicas, copias externas al proyecto y rollback si una escritura falla.
+- [x] Deshacer con comprobación de todos los archivos y backups antes de restaurar.
+- [x] Historial de tareas accesible desde la interfaz.
+- [x] Cancelación de generación.
+- [ ] Validar calidad con tareas reales de render, chunks, jugador, Rust y Android.
+- [ ] Ampliar pruebas de fallos inducidos, cierre inesperado y recuperación del historial.
+- [ ] Implementar streaming token a token; el chat actual informa progreso y permite detener, pero la respuesta se entrega al terminar la generación.
 
-## Límites de esta entrega
+## Fase 3 — Pendiente
 
-1. El modelo 0.5B Q3_K_M incluido (aprox. 355 MB) es una versión ligera para móviles; no sustituye un modelo grande de ingeniería. Debe evaluarse en Minefade antes de confiarle tareas complejas.
-2. El agente puede inspeccionar y modificar una tarea multiarchivo con aprobación, pero no ejecuta código arbitrario ni tiene acceso general al teléfono.
-3. Los checks locales son estructurales; los compiladores, pruebas C++/Rust y build Android siguen siendo autoridad.
-4. No se compila el APK del videojuego Minefade desde GameForge AI (fase 3).
-5. El APK GameForge AI de CI es debug; la firma Release persistente se define por separado.
+- [ ] Conectar una compilación remota autenticada a GitHub Actions sin incrustar credenciales.
+- [ ] Ejecutar Gradle, CMake, NDK y Rust para Minefade.
+- [ ] Repetir compilación después de corregir errores reales.
+- [ ] Probar instalación, apertura del mundo, render y guardado en emulador.
+- [ ] Gestionar una clave persistente de firma Release y verificar actualizaciones.
+- [ ] Entregar APK Minefade, logs, SHA-256 y resultado de pruebas desde GameForge AI.
+
+## Limitaciones conocidas
+
+1. El modelo 0.5B Q3_K_M es ligero y limitado; no sustituye a un modelo grande de programación.
+2. La edición se limita a fuentes/texto permitidos. No ejecuta código arbitrario ni da acceso general al teléfono.
+3. Los checks estructurales no sustituyen los compiladores ni las pruebas del juego.
+4. El APK generado por CI para esta etapa es debug, no Release firmado.
+5. El emulador Android 12 no sustituye la prueba en el dispositivo real del usuario.

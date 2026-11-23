@@ -137,7 +137,11 @@ public final class BuiltinAssetsInstaller {
             if (length < MIN_MODEL_BYTES || length > MAX_MODEL_BYTES) {
                 throw new IOException("El modelo incluido no tiene un tamaño válido.");
             }
-            if (destination.isFile() && destination.length() == length) return destination;
+            String expectedHash = readExpectedModelHash(context);
+            if (destination.isFile() && destination.length() == length
+                    && expectedHash.equals(sha256(destination))) {
+                return destination;
+            }
             long required = length + 96L * 1024L * 1024L;
             if (models.getUsableSpace() < required) {
                 throw new IOException("No hay espacio suficiente para instalar automáticamente el modelo de IA. Libera al menos "
@@ -171,15 +175,35 @@ public final class BuiltinAssetsInstaller {
                 throw new IOException("Falló la copia del modelo local.", error);
             }
             String hash = toHex(digest.digest());
-            File checksum = new File(models, MODEL_FILE + ".sha256");
-            writeSynced(checksum, hash + "\n");
+            if (!expectedHash.equals(hash)) {
+                temporary.delete();
+                throw new IOException("El hash SHA-256 del modelo incluido no coincide con su manifiesto.");
+            }
             try {
                 Files.move(temporary.toPath(), destination.toPath(),
                         StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException unsupportedAtomicMove) {
                 Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING);
             }
+            File checksum = new File(models, MODEL_FILE + ".sha256");
+            writeSynced(checksum, hash + "\n");
             return destination;
+        }
+    }
+
+    private static String readExpectedModelHash(Context context) throws IOException {
+        try (InputStream input = context.getAssets().open("models/model-info.json")) {
+            byte[] bytes = new byte[64 * 1024];
+            int count = input.read(bytes);
+            if (count <= 0) throw new IOException("El manifiesto del modelo está vacío.");
+            JSONObject info = new JSONObject(new String(bytes, 0, count, StandardCharsets.UTF_8));
+            String hash = info.optString("sha256", "");
+            if (!hash.matches("[a-fA-F0-9]{64}")) throw new IOException("El manifiesto del modelo no contiene un SHA-256 válido.");
+            return hash.toLowerCase(java.util.Locale.ROOT);
+        } catch (IOException error) {
+            throw error;
+        } catch (Exception error) {
+            throw new IOException("No se pudo leer el manifiesto del modelo incluido.", error);
         }
     }
 

@@ -35,7 +35,8 @@ public final class MinefadeProjectWorkspace {
     private static final int MAX_FILE_BYTES = 512 * 1024;
     private static final int MAX_FILES = 1800;
     private static final int MAX_DEPTH = 9;
-    private static final int MAX_BATCH_FILES = 8;
+    private static final int MAX_BATCH_FILES = 12;
+    private static final int MAX_PATCHES_PER_FILE = 24;
     private static final int MAX_TRANSACTIONS = 12;
     private static final int MAX_CONTEXT_CHARS = 7600;
 
@@ -145,6 +146,10 @@ public final class MinefadeProjectWorkspace {
 
     /** Builds a small, task-oriented project map for the included local model. */
     public synchronized String buildContext(String task) {
+        return buildContext(task, MAX_CONTEXT_CHARS);
+    }
+
+    public synchronized String buildContext(String task, int requestedLimit) {
         try {
             requireReady();
             JSONArray listing = new JSONArray();
@@ -159,10 +164,11 @@ public final class MinefadeProjectWorkspace {
                     .append("No cambies el formato de mundo MFVOX001/002/003 ni IDs de bloque sin migración versionada.\n");
             out.append("ARCHIVOS (rutas relativas; solo los listados existen):\n");
             for (String path : paths) {
-                if (out.length() > 2800) break;
+                if (out.length() > Math.min(2800, contextLimit / 2)) break;
                 out.append("- ").append(path).append('\n');
             }
 
+            int contextLimit = Math.max(1800, Math.min(MAX_CONTEXT_CHARS, requestedLimit));
             String lower = task == null ? "" : task.toLowerCase(Locale.ROOT);
             List<String> preferred = new ArrayList<>();
             preferred.add("README.md");
@@ -209,13 +215,13 @@ public final class MinefadeProjectWorkspace {
             for (String path : preferred) if (!unique.contains(path) && paths.contains(path)) unique.add(path);
             out.append("\nCONTEXTO DE ARCHIVOS IMPORTANTES:\n");
             for (String path : unique) {
-                if (out.length() >= MAX_CONTEXT_CHARS) break;
+                if (out.length() >= contextLimit) break;
                 File file = resolve(path, false);
                 String content;
                 try { content = readLimited(file); }
                 catch (IOException large) { continue; }
-                int remaining = MAX_CONTEXT_CHARS - out.length();
-                int cap = Math.min(1550, Math.max(0, remaining - path.length() - 20));
+                int remaining = contextLimit - out.length();
+                int cap = Math.min(1100, Math.max(0, remaining - path.length() - 20));
                 if (content.length() > cap) content = content.substring(0, cap) + "\n[CONTENIDO RECORTADO; pide inspección del archivo completo]\n";
                 out.append("\n--- ").append(path).append(" ---\n").append(content).append('\n');
             }
@@ -249,17 +255,23 @@ public final class MinefadeProjectWorkspace {
                 String path = normalize(item.optString("path", ""));
                 if (seen.contains(path)) throw new IOException("La propuesta repite el archivo " + path + ".");
                 seen.add(path);
-                String content = item.optString("content", "");
-                if (content.indexOf('\u0000') >= 0
-                        || content.getBytes(StandardCharsets.UTF_8).length > MAX_FILE_BYTES) {
-                    throw new IOException("El archivo " + path + " supera 512 KB o contiene datos no válidos.");
-                }
                 File target = resolve(path, true);
                 boolean exists = target.isFile();
                 if (!exists && !isAllowedNewFileLocation(path)) {
                     throw new IOException("No se permite crear archivos en esa ubicación: " + path);
                 }
                 String before = exists ? readLimited(target) : "";
+                String content;
+                if (item.has("patches")) {
+                    if (!exists) throw new IOException("No se pueden aplicar parches a un archivo nuevo: " + path);
+                    content = applyExactPatches(before, item.getJSONArray("patches"), path);
+                } else {
+                    content = item.optString("content", "");
+                }
+                if (content.indexOf('\u0000') >= 0
+                        || content.getBytes(StandardCharsets.UTF_8).length > MAX_FILE_BYTES) {
+                    throw new IOException("El archivo " + path + " supera 512 KB o contiene datos no válidos.");
+                }
                 PendingFile edit = new PendingFile(path, sha256(before), content, exists);
                 staged.add(edit);
 
@@ -384,6 +396,9 @@ public final class MinefadeProjectWorkspace {
             if (history.length() == 0) throw new IOException("No hay tareas aplicadas que se puedan deshacer.");
             JSONObject transaction = history.getJSONObject(history.length() - 1);
             JSONArray changes = transaction.getJSONArray("files");
+            List<String> previousContents = new ArrayList<>();
+            List<File> targets = new ArrayList<>();
+            List<File> backups = new ArrayList<>();
             for (int i = 0; i < changes.length(); i++) {
                 JSONObject change = changes.getJSONObject(i);
                 File target = resolve(change.getString("path"), true);
@@ -391,24 +406,130 @@ public final class MinefadeProjectWorkspace {
                     throw new IOException("El archivo " + change.getString("path")
                             + " cambió después de la tarea. No se restauró nada para evitar perder trabajo.");
                 }
-            }
-            for (int i = changes.length() - 1; i >= 0; i--) {
-                JSONObject change = changes.getJSONObject(i);
-                File target = resolve(change.getString("path"), true);
+                targets.add(target);
+                previousContents.add(readLimited(target));
                 if (change.optBoolean("existed")) {
                     File backup = new File(backupsRoot, change.getString("backup"));
-                    if (!backup.isFile()) throw new IOException("Falta una copia de seguridad para " + change.getString("path") + ".");
-                    writeAtomic(target, readLimited(backup));
-                    backup.delete();
+                    if (!backup.isFile()) throw new IOException("Falta una copia de seguridad para " + change.getString("path") + ". No se restauró ningún archivo.");
+                    backups.add(backup);
                 } else {
-                    if (target.exists() && !target.delete()) throw new IOException("No se pudo retirar el archivo nuevo " + change.getString("path") + ".");
+                    backups.add(null);
                 }
             }
-            history.remove(history.length() - 1);
-            writeHistory(history);
+            int restored = 0;
+            try {
+                for (int i = changes.length() - 1; i >= 0; i--) {
+                    JSONObject change = changes.getJSONObject(i);
+                    File target = targets.get(i);
+                    if (change.optBoolean("existed")) {
+                        writeAtomic(target, readLimited(backups.get(i)));
+                    } else if (target.exists() && !target.delete()) {
+                        throw new IOException("No se pudo retirar el archivo nuevo " + change.getString("path") + ".");
+                    }
+                    restored++;
+                }
+                history.remove(history.length() - 1);
+                writeHistory(history);
+            } catch (Exception restoreFailure) {
+                for (int i = 0; i < changes.length(); i++) {
+                    try {
+                        if (targets.get(i).getParentFile() != null && !targets.get(i).getParentFile().exists()) {
+                            targets.get(i).getParentFile().mkdirs();
+                        }
+                        writeAtomic(targets.get(i), previousContents.get(i));
+                    } catch (Exception rollbackFailure) {
+                        restoreFailure.addSuppressed(rollbackFailure);
+                    }
+                }
+                throw restoreFailure;
+            }
+            for (File backup : backups) if (backup != null) backup.delete();
             result.put("ok", true);
             result.put("summary", transaction.optString("summary"));
             result.put("fileCount", changes.length());
+        } catch (Exception error) {
+            putError(result, error);
+        }
+        return result;
+    }
+
+    /** Applies deterministic exact text patches; ambiguous matches are rejected. */
+    private String applyExactPatches(String original, JSONArray patches, String path) throws Exception {
+        if (patches.length() < 1 || patches.length() > MAX_PATCHES_PER_FILE) {
+            throw new IOException("El archivo " + path + " debe tener entre 1 y " + MAX_PATCHES_PER_FILE + " parches.");
+        }
+        String result = original;
+        for (int i = 0; i < patches.length(); i++) {
+            JSONObject patch = patches.getJSONObject(i);
+            String find = patch.optString("find", "");
+            String replace = patch.optString("replace", "");
+            if (find.isEmpty()) throw new IOException("El parche " + (i + 1) + " de " + path + " no contiene el texto que debe localizar.");
+            if (find.length() > 16000 || replace.length() > 24000) {
+                throw new IOException("El parche " + (i + 1) + " de " + path + " es demasiado grande.");
+            }
+            int count = countOccurrences(result, find);
+            int occurrence = patch.optInt("occurrence", 0);
+            if (count == 0) throw new IOException("No se encontró el fragmento del parche " + (i + 1) + " en " + path + ". No se aplicó ningún archivo.");
+            if (occurrence <= 0 && count != 1) {
+                throw new IOException("El fragmento del parche " + (i + 1) + " aparece " + count
+                        + " veces en " + path + ". Añade occurrence para seleccionar una coincidencia exacta.");
+            }
+            if (occurrence > count) throw new IOException("La coincidencia " + occurrence + " no existe en " + path + ".");
+            int position = -1;
+            int from = 0;
+            for (int hit = 1; hit <= occurrence || (occurrence == 0 && hit == 1); hit++) {
+                position = result.indexOf(find, from);
+                if (position < 0) break;
+                from = position + find.length();
+                if (occurrence == 0 || hit == occurrence) break;
+            }
+            if (position < 0) throw new IOException("No se pudo localizar la coincidencia seleccionada en " + path + ".");
+            result = result.substring(0, position) + replace + result.substring(position + find.length());
+            if (result.getBytes(StandardCharsets.UTF_8).length > MAX_FILE_BYTES) {
+                throw new IOException("Los parches hacen que " + path + " supere 512 KB.");
+            }
+        }
+        return result;
+    }
+
+    private int countOccurrences(String source, String needle) {
+        int count = 0;
+        int position = 0;
+        while ((position = source.indexOf(needle, position)) >= 0) {
+            count++;
+            position += needle.length();
+        }
+        return count;
+    }
+
+    /** Returns the bounded, user-visible task history for the Tasks screen. */
+    public synchronized JSONObject getChangeHistory() {
+        JSONObject result = new JSONObject();
+        try {
+            JSONArray history = readHistory();
+            JSONArray tasks = new JSONArray();
+            for (int i = history.length() - 1; i >= 0; i--) {
+                JSONObject transaction = history.getJSONObject(i);
+                JSONArray files = transaction.optJSONArray("files");
+                JSONArray paths = new JSONArray();
+                if (files != null) {
+                    for (int j = 0; j < files.length(); j++) {
+                        JSONObject change = files.getJSONObject(j);
+                        paths.put(change.optString("path"));
+                    }
+                }
+                JSONObject task = new JSONObject();
+                task.put("id", transaction.optString("id"));
+                task.put("summary", transaction.optString("summary"));
+                task.put("createdAt", transaction.optLong("createdAt"));
+                task.put("fileCount", paths.length());
+                task.put("files", paths);
+                task.put("canUndo", i == history.length() - 1);
+                tasks.put(task);
+            }
+            result.put("ok", true);
+            result.put("tasks", tasks);
+            result.put("count", tasks.length());
         } catch (Exception error) {
             putError(result, error);
         }

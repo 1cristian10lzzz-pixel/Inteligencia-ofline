@@ -1,50 +1,72 @@
-# GameForge AI — Fases 1 y 2 orientadas a Minefade
+# Fases 1 y 2 — GameForge AI especializada en Minefade
 
-## Alcance
+## Objetivo y límites
 
-Estas fases convierten GameForge AI en una aplicación Android offline con modelo incluido y un agente de código especializado en el repositorio Minefade 2.0. No intentan compilar el APK del videojuego desde el teléfono: esa integración pertenece a la fase 3. La compilación del propio APK de GameForge AI se realiza en GitHub Actions.
+GameForge AI es un estudio móvil que incluye el modelo de IA y una instantánea local del repositorio Minefade 2.0. Las fases 1 y 2 permiten conversar, inspeccionar fuentes, proponer parches y restaurar tareas sin conexión. La fase 3 —compilación autenticada del APK de Minefade— permanece separada y no se presenta como terminada.
 
-## Fase 1 — Aplicación preparada e IA local incluida
+## Fase 1 — Aplicación y runtime
 
-- La interfaz de inicio utiliza el estudio local studio.html, con pantallas independientes: Inicio, Proyectos, Chat, Archivos, Reparación y Ajustes.
-- El historial de conversaciones se mantiene localmente y separado por proyecto.
-- El paquete CI incorpora un snapshot del repositorio 1cristian10lzzz-pixel/Minefade-2.0 fijado a un commit.
-- El snapshot se instala automáticamente en el primer arranque en files/projects/minefade. Una instalación incompleta no sustituye ni borra una carpeta existente.
-- El paquete incorpora un GGUF Qwen2.5-Coder-0.5B-Instruct Q3_K_M. Se copia automáticamente al almacenamiento privado y se carga por llama.cpp, sin selector de archivos.
-- No se añade permiso INTERNET a la aplicación. El APK final incluye el motor C++ y el GGUF; una vez instalado, la inferencia no necesita conexión.
-- La app mantiene un estado explícito de carga/errores; no enseña “IA lista” antes de que llama.cpp confirme el modelo.
-- La prueba de CI comprueba arranque, pantalla, carga del GGUF e inferencia de una frase de autodiagnóstico en emulador Android 12.
+- El APK incorpora Qwen2.5-Coder-0.5B-Instruct Q3_K_M, su manifiesto, SHA-256 y licencia.
+- En el primer arranque, la app extrae el snapshot de Minefade y copia el GGUF al almacenamiento privado.
+- Antes de reutilizar el modelo ya copiado, verifica longitud y SHA-256; un archivo dañado se reemplaza desde el asset incluido.
+- llama.cpp se inicializa en un ejecutor de fondo. Contexto e hilos se ajustan a RAM disponible.
+- El estado de IA solo se declara preparado tras confirmar el modelo en el runtime.
+- La inferencia funciona localmente; el APK no solicita INTERNET.
+- JNI permite detener una generación que se está ejecutando.
+- El estado expone RAM, espacio libre, contexto, hilos, versión Android y número de fuentes.
+- Las conversaciones se guardan por proyecto en almacenamiento WebView local.
+- El rediseño organiza la aplicación en Inicio, Proyectos, Conversaciones, Agente, Código, Tareas, Compilación y Configuración.
 
-### Límite honesto del modelo inicial
+### Capacidad del modelo
 
-El modelo base es de 0.5B parámetros y ronda 400 MB como archivo Q3_K_M. Está incluido para que el usuario no tenga que importar nada, pero no equivale a un modelo grande de ingeniería. La especialización en Minefade procede también del índice del código, documentación y herramientas locales. Los cambios complejos deben pasar revisión y validación. Un teléfono con poca RAM o almacenamiento puede rechazar la carga; el error debe presentarse sin cerrar la aplicación.
+Qwen 0.5B Q3_K_M es una elección de compromiso para dispositivos móviles. Puede responder y ayudar a localizar problemas, pero puede cometer errores de razonamiento o generar propuestas incompletas. La especialización Minefade procede del contexto del repositorio, las instrucciones, el buscador y los límites transaccionales. Una propuesta nunca se aplica automáticamente.
 
-## Fase 2 — Agente programador de Minefade
+## Fase 2 — Agente de ingeniería
 
-- El proyecto Minefade aparece de fábrica en Proyectos.
-- El workspace distingue el proyecto nativo Minefade de las plantillas Godot que siguen disponibles para proyectos secundarios.
-- El índice enumera archivos de código y documentación permitidos, excluyendo carpetas build, dependencias descargadas y binarios.
-- El agente recibe el mapa de arquitectura y fragmentos de archivos relacionados con la tarea del usuario.
-- El explorador permite abrir un archivo y buscar texto en los archivos locales.
-- La IA puede proponer una transacción de hasta ocho archivos mediante un bloque estructurado.
-- La vista previa muestra el contenido anterior y el nuevo, indica archivos creados y advierte sobre validaciones ligeras.
-- Antes de aplicar, se comprueban de nuevo las rutas, la existencia y el SHA-256 de todos los archivos.
-- Las modificaciones se escriben de forma atómica, con copias fuera del proyecto y rollback de la transacción si falla una escritura.
-- El deshacer restaura la última tarea completa, pero se niega a sobrescribir archivos que hayan cambiado después.
-- Las rutas están limitadas a la carpeta Minefade y a extensiones de texto permitidas. No hay acceso general al almacenamiento, shell ni ejecución de código proporcionado por el modelo.
-- Los archivos de firma y secretos (local.properties, .jks, .keystore, .env, credenciales) están protegidos.
-- La validación local cubre formato JSON/XML y una comprobación ligera de delimitadores en código. No se presenta como compilador C++/Rust/Android: esas pruebas siguen siendo las autoridades para confirmar que el motor compila.
+### Contexto y análisis
+- El workspace solo accede a `files/projects/minefade`.
+- El índice excluye binarios, builds, dependencias y directorios no necesarios.
+- El contexto dirige las consultas a arquitectura, render, mundo, jugador, entidades, mods o LAN según el tema.
+- El prompt prohíbe inventar APIs, rutas o resultados de pruebas y protege los formatos MFVOX001/002/003.
 
-## Cómo se mantiene el proyecto de Minefade
+### Cambios
+- Una tarea puede proponer hasta 12 archivos.
+- En archivos existentes se prefieren parches exactos `find/replace`; el texto buscado debe aparecer una sola vez salvo que se indique una ocurrencia concreta.
+- Los archivos nuevos requieren carpeta y extensión permitidas.
+- La vista previa enseña el antes y el después.
+- El agente nunca ejecuta el contenido del modelo como shell o código arbitrario.
 
-El snapshot se fija a MINEFADE_COMMIT en scripts/prepare-bundled-assets.sh. Los usuarios pueden trabajar sobre la copia privada instalada incluso sin Internet. Una sincronización a una revisión nueva debe ser una operación explícita que compare cambios y preserve archivos editados; nunca se debe sobrescribir silenciosamente el proyecto activo.
+### Seguridad y restauración
+- Las rutas se canonicalizan y se mantienen dentro de Minefade.
+- Se protegen `local.properties`, `.env`, keystores, credenciales, manifiestos internos y workflows.
+- Antes de aplicar se comparan hashes con los archivos originales.
+- Cada archivo se escribe atómicamente y los backups se almacenan fuera del proyecto.
+- Si una escritura falla, se restaura la transacción.
+- Para deshacer, se validan primero todos los hashes y backups. Si algún archivo cambió después, se rechaza la operación para no perder trabajo.
+- El historial registra resumen, fecha, rutas y archivos afectados.
 
-## Fase 3 — Fuera del alcance de esta entrega
+### Validación
+- JSON y XML: análisis estructural.
+- C++, Rust, Java, Kotlin y shaders: comprobación ligera de delimitadores.
+- La app explica que estas verificaciones no sustituyen CMake, Gradle, NDK, Cargo ni pruebas reales de Minefade.
 
-- Ejecutar Gradle/CMake/NDK/Rust desde el teléfono.
-- Compilar el APK de Minefade directamente dentro de GameForge AI.
-- Firmar el APK de Minefade con una clave persistente.
-- Instalar y verificar el APK de Minefade desde la propia aplicación.
-- Validar visualmente Minefade en el dispositivo físico del usuario.
+## Interfaz
 
-Hasta que la fase 3 exista, la pantalla debe explicar que el agente puede editar y preparar cambios, pero no anunciar que ya compila el videojuego desde el móvil.
+- Inicio: proyecto activo, estado de runtime y accesos rápidos.
+- Proyectos: Minefade y proyectos secundarios.
+- Conversaciones: historial independiente por proyecto, nuevo chat y detención.
+- Agente: auditoría integral y diagnósticos por subsistema.
+- Código: búsqueda y lectura de archivos.
+- Tareas: historial, copias y deshacer.
+- Compilación: estado transparente de la fase 3.
+- Configuración: modelo, RAM, almacenamiento y estado del proyecto.
+
+En móvil, una barra inferior ofrece Inicio, Proyectos, Chats, Agente y Más; el menú lateral permite acceder a todas las áreas.
+
+## Pendiente — Fase 3
+
+GameForge AI todavía no autentica un servicio de compilación. Para generar el APK del videojuego se necesita un flujo seguro de autorización de GitHub Actions, compilación de Gradle/CMake/NDK/Rust, diagnóstico de logs, pruebas del juego, firma Release persistente y descarga verificada. No se debe almacenar un token personal ni contraseña dentro del APK.
+
+## Pruebas requeridas
+
+La CI debe validar el snapshot, checksum GGUF, build del APK GameForge AI, presencia de assets, arranque en Android 12, dos arranques en frío y una inferencia de autodiagnóstico con contexto largo. Además, quedan pendientes pruebas manuales en el teléfono real y evaluación de calidad del modelo en tareas de ingeniería Minefade.

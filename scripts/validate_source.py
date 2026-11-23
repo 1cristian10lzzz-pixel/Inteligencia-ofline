@@ -42,10 +42,13 @@ require("MainActivity.this.createProject" in main_java, "El puente debe delegar 
 
 studio = (ASSETS / "studio.html").read_text(encoding="utf-8")
 require((ASSETS / "studio.html").is_file(), "Falta la nueva interfaz por secciones")
-for route in ['data-page="home"', 'data-page="projects"', 'data-page="chat"', 'data-page="files"', 'data-page="repair"', 'data-page="settings"']:
+for route in ['data-page="home"', 'data-page="projects"', 'data-page="chat"', 'data-page="agent"', 'data-page="files"', 'data-page="tasks"', 'data-page="build"', 'data-page="settings"', 'data-page="more"']:
     require(route in studio, f"Falta una sección del estudio: {route}")
 require("GameForge.askAsync" in studio, "El chat del estudio debe llamar al motor local")
 require("previewProjectBatchEdit" in studio, "La UI debe permitir revisar propuestas multiarchivo")
+require("GameForge.cancelGeneration()" in studio, "La UI debe poder detener una generación")
+require("getProjectChangeHistory" in studio, "La UI debe mostrar el historial de tareas")
+require("Fase 3 pendiente" in studio, "La UI debe indicar con claridad que la compilación del APK Minefade todavía no está integrada")
 require("localStorage" in studio, "El historial de chats debe persistir localmente")
 require((ANDROID / "app/src/main/java/com/gameforgeai/studio/BuiltinAssetsInstaller.java").is_file(), "Falta el instalador de recursos integrados")
 require((ANDROID / "app/src/main/java/com/gameforgeai/studio/MinefadeProjectWorkspace.java").is_file(), "Falta el workspace nativo Minefade")
