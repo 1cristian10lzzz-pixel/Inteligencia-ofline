@@ -35,7 +35,7 @@ checks = {
     "new UI supports per-project conversations": "localStorage" in HTML and "sessions" in HTML,
     "new UI supports stop-generation action": "GameForge.cancelGeneration()" in HTML and "onGameForgeGenerationStarted" in HTML,
     "new UI displays task history and reversible changes": "getProjectChangeHistory" in HTML and "undoLastProjectEdit" in HTML,
-    "new UI clearly separates phase 3 build status": "Fase 3 pendiente" in HTML and "todavía no está conectada" not in HTML,
+    "new UI clearly separates phase 3 build status": "Fase 3 pendiente" in HTML and "todavía no está conectada" in HTML,
     "new UI submits prompts to local inference": "GameForge.askAsync" in HTML,
     "new UI can review and apply a batch proposal": all(text in HTML for text in ("previewProjectBatchEdit", "applyProjectBatchEdit", "cancelProjectBatchEdit")),
     "model is not compressed inside APK": '"gguf"' in GRADLE and "noCompress" in GRADLE,
