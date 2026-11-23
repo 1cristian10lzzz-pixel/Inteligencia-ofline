@@ -3,6 +3,7 @@
 #include <llama.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -20,6 +21,7 @@ llama_model *g_model = nullptr;
 llama_context *g_context = nullptr;
 llama_sampler *g_sampler = nullptr;
 std::string g_last_error;
+std::atomic<bool> g_cancel_requested{false};
 bool g_backend_initialized = false;
 
 void set_error(const std::string &message) { g_last_error = message; LOGE("%s", message.c_str()); }
@@ -51,9 +53,10 @@ std::vector<llama_token> tokenize(const llama_vocab *vocab, const std::string &t
 }
 std::string make_prompt(const std::string &user_text) {
     const char *system_text =
-        "Eres GameForge AI, un asistente experto en crear videojuegos para Android. "
-        "Ayuda con Godot 4, GDScript, C++, Kotlin, diseño de juegos, escenas, recursos y depuración. "
-        "Responde en español, da pasos concretos y no afirmes haber modificado archivos si no lo has hecho.";
+        "Eres GameForge AI, un asistente local de ingeniería de videojuegos. "
+        "Sigue la especialización, el proyecto y las reglas que se proporcionan en el mensaje del usuario; "
+        "no asumas que el proyecto usa Godot ni inventes APIs, archivos, funciones o resultados de pruebas. "
+        "Responde en español, prioriza cambios pequeños y seguros, y nunca afirmes haber editado, compilado o probado algo sin evidencia.";
     llama_chat_message messages[2] = {{"system", system_text}, {"user", user_text.c_str()}};
     const char *chat_template = llama_model_chat_template(g_model, nullptr);
     if (chat_template) {
@@ -135,6 +138,8 @@ Java_com_gameforgeai_studio_LocalLlmRuntime_nativeGenerate(JNIEnv *env, jclass, 
         return env->NewStringUTF(g_last_error.c_str());
     }
     try {
+        g_cancel_requested.store(false, std::memory_order_relaxed);
+        g_last_error.clear();
         const std::string user_text = from_jstring(env, prompt_value);
         const std::string formatted = make_prompt(user_text);
         const llama_vocab *vocab = llama_model_get_vocab(g_model);
@@ -154,22 +159,44 @@ Java_com_gameforgeai_studio_LocalLlmRuntime_nativeGenerate(JNIEnv *env, jclass, 
         llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(0.90f, 1));
         llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(temp));
         llama_sampler_chain_add(g_sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
-        llama_batch batch = llama_batch_init(static_cast<int32_t>(prompt_tokens.size()), 0, 1);
-        for (size_t i = 0; i < prompt_tokens.size(); ++i) {
-            batch.token[i] = prompt_tokens[i];
-            batch.pos[i] = static_cast<llama_pos>(i);
-            batch.n_seq_id[i] = 1;
-            batch.seq_id[i][0] = 0;
-            batch.logits[i] = (i + 1 == prompt_tokens.size()) ? 1 : 0;
+        // Prefill in bounded chunks. llama_decode cannot receive a prompt larger than n_batch.
+        // Keep the final prompt token's logits so sampling begins from the complete prompt.
+        constexpr size_t kPromptBatchLimit = 256;
+        for (size_t offset = 0; offset < prompt_tokens.size(); offset += kPromptBatchLimit) {
+            if (g_cancel_requested.load(std::memory_order_relaxed)) {
+                g_last_error.clear();
+                return env->NewStringUTF("");
+            }
+            const size_t count = std::min(kPromptBatchLimit, prompt_tokens.size() - offset);
+            llama_batch batch = llama_batch_init(static_cast<int32_t>(count), 0, 1);
+            if (batch.token == nullptr || batch.pos == nullptr || batch.n_seq_id == nullptr
+                    || batch.seq_id == nullptr || batch.logits == nullptr) {
+                llama_batch_free(batch);
+                set_error("No se pudo reservar memoria para procesar el prompt del modelo.");
+                return env->NewStringUTF(g_last_error.c_str());
+            }
+            for (size_t i = 0; i < count; ++i) {
+                const size_t tokenIndex = offset + i;
+                batch.token[i] = prompt_tokens[tokenIndex];
+                batch.pos[i] = static_cast<llama_pos>(tokenIndex);
+                batch.n_seq_id[i] = 1;
+                batch.seq_id[i][0] = 0;
+                batch.logits[i] = (tokenIndex + 1 == prompt_tokens.size()) ? 1 : 0;
+            }
+            const int32_t prompt_result = llama_decode(g_context, batch);
+            llama_batch_free(batch);
+            if (prompt_result != 0) {
+                set_error("Falló el procesamiento inicial del modelo en el bloque de tokens "
+                          + std::to_string(offset) + ".");
+                return env->NewStringUTF(g_last_error.c_str());
+            }
         }
-        const int32_t prompt_result = llama_decode(g_context, batch);
-        llama_batch_free(batch);
-        if (prompt_result != 0) { set_error("Falló el procesamiento inicial del modelo."); return env->NewStringUTF(g_last_error.c_str()); }
 
         const int limit = std::clamp(static_cast<int>(max_tokens), 16, 768);
         std::string output;
         llama_pos position = static_cast<llama_pos>(prompt_tokens.size());
         for (int i = 0; i < limit && position < static_cast<llama_pos>(context_limit - 1); ++i) {
+            if (g_cancel_requested.load(std::memory_order_relaxed)) break;
             const llama_token token = llama_sampler_sample(g_sampler, g_context, -1);
             if (llama_vocab_is_eog(vocab, token)) break;
             llama_sampler_accept(g_sampler, token);
@@ -197,6 +224,16 @@ Java_com_gameforgeai_studio_LocalLlmRuntime_nativeGenerate(JNIEnv *env, jclass, 
         set_error(error.what());
         return env->NewStringUTF(g_last_error.c_str());
     }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_gameforgeai_studio_LocalLlmRuntime_nativeCancelGeneration(JNIEnv *, jclass) {
+    g_cancel_requested.store(true, std::memory_order_relaxed);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_gameforgeai_studio_LocalLlmRuntime_nativeWasGenerationCancelled(JNIEnv *, jclass) {
+    return g_cancel_requested.load(std::memory_order_relaxed) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL

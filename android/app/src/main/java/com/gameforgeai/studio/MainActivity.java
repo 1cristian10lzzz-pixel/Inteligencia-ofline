@@ -46,6 +46,7 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -62,17 +63,27 @@ public class MainActivity extends Activity {
     private final ExecutorService modelExecutor = Executors.newSingleThreadExecutor();
     private final ExecutorService generationExecutor = Executors.newSingleThreadExecutor();
     private ProjectWorkspace projectWorkspace;
+    private MinefadeProjectWorkspace minefadeWorkspace;
+    private volatile boolean bundledBootstrapRunning = false;
+    private volatile boolean minefadeProjectReady = false;
+    private volatile String bootstrapStatus = "Preparando Minefade y la IA local…";
+    private final AtomicBoolean generationRunning = new AtomicBoolean(false);
+    private final AtomicBoolean generationCancelRequested = new AtomicBoolean(false);
+    private volatile int activeContextSize = 0;
+    private volatile int activeThreadCount = 0;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         projectWorkspace = new ProjectWorkspace(getFilesDir());
+        minefadeWorkspace = new MinefadeProjectWorkspace(getFilesDir());
         rootLayout = new FrameLayout(this);
         rootLayout.setBackgroundColor(Color.rgb(10, 14, 24));
         setContentView(rootLayout);
         // DecorView/WindowInsetsController are not guaranteed to exist before content is attached.
         setStatusBar();
         openWebViewSafely();
+        bootstrapBundledAssetsAndModel();
     }
 
     /** Keeps the native Activity alive even if WebView cannot be created. */
@@ -117,9 +128,9 @@ public class MainActivity extends Activity {
                 @Override
                 public void onPageFinished(WebView target, String url) {
                     super.onPageFinished(target, url);
-                    if (url != null && url.startsWith("file:///android_asset/index.html")) {
+                    if (url != null && url.startsWith("file:///android_asset/studio.html")) {
                         target.evaluateJavascript(
-                                "document.readyState === 'complete' && !!document.getElementById('messages')",
+                                "document.readyState === 'complete' && !!document.getElementById('appRoot')",
                                 value -> {
                                     if ("true".equals(value)) {
                                         Log.i(TAG, "UI_READY");
@@ -162,11 +173,70 @@ public class MainActivity extends Activity {
             rootLayout.addView(view, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT));
-            view.loadUrl("file:///android_asset/index.html");
+            view.loadUrl("file:///android_asset/studio.html");
         } catch (RuntimeException | LinkageError failure) {
             Log.e(TAG, "Error iniciando la interfaz Android", failure);
             showStartupError("GameForge AI no pudo iniciar su interfaz", failure.getMessage());
         }
+    }
+
+    private void bootstrapBundledAssetsAndModel() {
+        bundledBootstrapRunning = true;
+        bootstrapStatus = "Instalando Minefade y el modelo local incluido…";
+        modelExecutor.execute(() -> {
+            boolean success = false;
+            String message;
+            try {
+                File minefade = BuiltinAssetsInstaller.ensureMinefadeProject(this, getFilesDir());
+                minefadeProjectReady = minefade.isDirectory();
+                Log.i(TAG, "MINEFADE_PROJECT_READY " + minefade.getAbsolutePath());
+                bootstrapStatus = "Copiando el modelo de IA incluido…";
+                File model = BuiltinAssetsInstaller.ensureBundledModel(this, getFilesDir());
+                ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+                ActivityManager.MemoryInfo memory = new ActivityManager.MemoryInfo();
+                if (manager != null) manager.getMemoryInfo(memory);
+                long totalRam = memory.totalMem;
+                int contextSize = chooseContextSize(memory);
+                int threads = chooseThreadCount();
+                activeContextSize = contextSize;
+                activeThreadCount = threads;
+                bootstrapStatus = "Cargando Qwen2.5-Coder en el motor nativo…";
+                Log.i(TAG, "MODEL_LOADING bytes=" + model.length() + " context=" + contextSize);
+                boolean loaded = LocalLlmRuntime.loadModel(model.getAbsolutePath(), contextSize, threads);
+                if (!loaded) throw new IOException("No se pudo cargar el modelo incluido: " + LocalLlmRuntime.lastError());
+                Log.i(TAG, "MODEL_READY");
+                bootstrapStatus = "IA local lista · Minefade instalado";
+                if (BuildConfig.DEBUG) {
+                    StringBuilder longSelfTestPrompt = new StringBuilder("Comprueba el contexto largo de Minefade y responde OK. ");
+                    for (int i = 0; i < 40; i++) {
+                        longSelfTestPrompt.append("Minefade usa C++20, Rust, JNI, OpenGL ES 3, RmlUi, chunks, bloques, shaders, memoria y mundos MFVOX. ");
+                    }
+                    String selfTest = LocalLlmRuntime.generate(longSelfTestPrompt.toString(), 24, 0.1f);
+                    if (selfTest == null || selfTest.trim().isEmpty()
+                            || selfTest.startsWith("Error") || selfTest.startsWith("No hay un modelo")) {
+                        throw new IOException("La prueba de inferencia del modelo no pasó: " + selfTest);
+                    }
+                    Log.i(TAG, "INFERENCE_SELF_TEST_PASS chars=" + selfTest.length());
+                }
+                success = true;
+                message = bootstrapStatus;
+            } catch (Exception error) {
+                message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+                bootstrapStatus = "No se pudo preparar la IA local: " + message;
+                Log.e(TAG, "BUNDLE_BOOTSTRAP_FAILED " + message, error);
+            } finally {
+                bundledBootstrapRunning = false;
+            }
+            final boolean ready = success;
+            final String finalMessage = message;
+            runOnUiThread(() -> {
+                if (webView != null) {
+                    webView.evaluateJavascript("window.onGameForgeBootstrap && window.onGameForgeBootstrap("
+                            + ready + "," + JSONObject.quote(finalMessage) + ");"
+                            + "window.refreshAll && window.refreshAll();", null);
+                }
+            });
+        });
     }
 
     private void showStartupError(String title, String details) {
@@ -463,7 +533,12 @@ public class MainActivity extends Activity {
                 notifyModelLoaded(requestId, false, "El modelo parece demasiado grande para la memoria RAM libre. Prueba una cuantización más pequeña.");
                 return;
             }
-            boolean loaded = LocalLlmRuntime.loadModel(model.getAbsolutePath(), 2048, 4);
+            long totalRam = memoryInfo.totalMem;
+            int contextSize = chooseContextSize(memoryInfo);
+            int threadCount = chooseThreadCount();
+            activeContextSize = contextSize;
+            activeThreadCount = threadCount;
+            boolean loaded = LocalLlmRuntime.loadModel(model.getAbsolutePath(), contextSize, threadCount);
             String message = loaded ? "Modelo cargado. La inferencia funciona localmente." : LocalLlmRuntime.lastError();
             notifyModelLoaded(requestId, loaded, message);
         });
@@ -480,55 +555,132 @@ public class MainActivity extends Activity {
     }
 
     private void askAsync(String prompt, String historyJson, String projectId, String requestId) {
+        if (prompt == null || prompt.trim().isEmpty()) return;
+        if (!generationRunning.compareAndSet(false, true)) {
+            notifyAgentAnswer(requestId, new JSONObject(), "Ya hay una generación en curso. Deténla antes de iniciar otra.");
+            return;
+        }
+        generationCancelRequested.set(false);
         generationExecutor.execute(() -> {
-            JSONObject response;
-            if (LocalLlmRuntime.isModelLoaded()) {
-                response = new JSONObject();
-                try {
+            JSONObject response = new JSONObject();
+            try {
+                if (LocalLlmRuntime.isModelLoaded()) {
+                    notifyGenerationStarted(requestId);
                     String modelPrompt = buildAgentPrompt(prompt, historyJson, projectId);
-                    String answer = LocalLlmRuntime.generate(modelPrompt, 768, 0.7f);
-                    response.put("answer", answer);
+                    String answer;
+                    boolean cancelled;
+                    if (generationCancelRequested.get()) {
+                        answer = "";
+                        cancelled = true;
+                    } else {
+                        answer = LocalLlmRuntime.generate(modelPrompt, 768, 0.7f);
+                        cancelled = generationCancelRequested.get() || LocalLlmRuntime.wasLastGenerationCancelled();
+                    }
+                    if (cancelled) {
+                        response.put("answer", answer == null || answer.isEmpty()
+                                ? "Generación detenida." : answer + "\n\n[Generación detenida]");
+                    } else {
+                        response.put("answer", answer == null ? "" : answer);
+                    }
                     response.put("mode", "llama_cpp");
                     response.put("agentProjectId", projectId == null ? "" : projectId);
-                    response.put("error", answer.startsWith("Error") || answer.startsWith("No hay un modelo"));
-                    attachEditProposal(response, answer);
-                } catch (Exception error) {
-                    try {
-                        response.put("answer", "No pude preparar la tarea del agente: " + error.getMessage());
-                        response.put("mode", "llama_cpp");
-                        response.put("error", true);
-                    } catch (JSONException ignored) { }
+                    response.put("cancelled", cancelled);
+                    response.put("error", !cancelled && isGenerationError(answer));
+                    if (!cancelled && !isGenerationError(answer)) attachEditProposal(response, answer);
+                } else if ("minefade".equals(projectId)) {
+                    response.put("answer", "La IA de Minefade todavía está preparando el modelo incluido. Espera a que el estado indique «IA local lista» y vuelve a enviar tu petición. No se ha creado ni modificado ningún proyecto.");
+                    response.put("mode", "bootstrap");
+                    response.put("error", true);
+                    response.put("agentProjectId", "minefade");
+                } else {
+                    JSONObject local = askLocalRules(prompt);
+                    response = local;
+                    response.put("agentProjectId", projectId == null ? "" : projectId);
                 }
-            } else {
-                response = askLocalRules(prompt);
-                try { response.put("agentProjectId", projectId == null ? "" : projectId); }
-                catch (JSONException ignored) { }
+            } catch (Exception error) {
+                try {
+                    response.put("answer", "No pude completar la tarea del agente: "
+                            + (error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage()));
+                    response.put("mode", "llama_cpp");
+                    response.put("error", true);
+                } catch (JSONException ignored) { }
+            } finally {
+                generationRunning.set(false);
+                generationCancelRequested.set(false);
             }
-            String id = JSONObject.quote(requestId == null ? "" : requestId);
-            String payload = JSONObject.quote(response.toString());
-            runOnUiThread(() -> {
-                if (webView != null) webView.evaluateJavascript(
-                        "window.onGameForgeAnswer && window.onGameForgeAnswer(" + id + "," + payload + ")", null);
-            });
+            notifyAgentAnswer(requestId, response, null);
         });
+    }
+
+    private boolean isGenerationError(String answer) {
+        if (answer == null || answer.trim().isEmpty()) return true;
+        return answer.startsWith("Error") || answer.startsWith("No hay un modelo")
+                || answer.startsWith("El texto es demasiado largo")
+                || answer.startsWith("Falló") || answer.startsWith("No se pudo")
+                || answer.startsWith("No hay memoria");
+    }
+
+    private void notifyGenerationStarted(String requestId) {
+        String id = JSONObject.quote(requestId == null ? "" : requestId);
+        runOnUiThread(() -> {
+            if (webView != null) webView.evaluateJavascript(
+                    "window.onGameForgeGenerationStarted && window.onGameForgeGenerationStarted(" + id + ")", null);
+        });
+    }
+
+    private void notifyAgentAnswer(String requestId, JSONObject response, String forcedError) {
+        if (forcedError != null) {
+            try { response.put("answer", forcedError); response.put("error", true); }
+            catch (JSONException ignored) { }
+        }
+        String id = JSONObject.quote(requestId == null ? "" : requestId);
+        String payload = JSONObject.quote(response.toString());
+        runOnUiThread(() -> {
+            if (webView != null) webView.evaluateJavascript(
+                    "window.onGameForgeAnswer && window.onGameForgeAnswer(" + id + "," + payload + ")", null);
+        });
+    }
+
+    private void cancelCurrentGeneration() {
+        if (!generationRunning.get()) return;
+        generationCancelRequested.set(true);
+        LocalLlmRuntime.cancelGeneration();
+    }
+
+    private int chooseContextSize(ActivityManager.MemoryInfo memory) {
+        if (memory == null || memory.lowMemory) return 1536;
+        if (memory.availMem >= 1_500_000_000L) return 3072;
+        if (memory.availMem >= 900_000_000L) return 2048;
+        return 1536;
+    }
+
+    private int chooseThreadCount() {
+        int processors = Runtime.getRuntime().availableProcessors();
+        return Math.max(2, Math.min(4, processors - 1));
     }
 
     private String buildAgentPrompt(String prompt, String historyJson, String projectId) {
         StringBuilder message = new StringBuilder();
-        message.append("Eres GameForge AI, un agente programador offline especializado en Godot y GDScript. ");
-        message.append("Responde en español, sé preciso y no inventes archivos ni funciones. ");
-        message.append("El usuario siempre revisa y aprueba cualquier edición antes de guardarla. ");
-        message.append("Nunca afirmes que modificaste un archivo si no has emitido una propuesta.\n\n");
-
-        if (projectId != null && projectId.matches("[a-z0-9-]{1,64}")) {
-            message.append("PROYECTO ACTIVO: ").append(projectId).append("\n");
-            message.append(projectWorkspace.buildContext(projectId)).append("\n");
-            message.append("Solo propone ediciones a rutas relativas que aparezcan en el proyecto o un archivo .gd nuevo dentro de scripts/. ");
-            message.append("Entrega el archivo completo, no un fragmento, y no superes 128 KB.\n");
+        boolean minefade = "minefade".equals(projectId) && minefadeWorkspace != null && minefadeWorkspace.isReady();
+        if (minefade) {
+            message.append("Eres GameForge AI, agente de ingeniería especializado exclusivamente en Minefade 2.0. ");
+            message.append("Responde en español. Minefade es un motor nativo Android, no un proyecto Godot: C++20, Rust ABI C, JNI, OpenGL ES 3, RmlUi 6.3, FreeType y Gradle/NDK. ");
+            message.append("Inspecciona el mapa y los fragmentos reales antes de proponer código. No inventes rutas, funciones, APIs ni resultados de pruebas. ");
+            message.append("Respeta los formatos MFVOX001, MFVOX002 y MFVOX003 y los IDs de bloque; nunca los cambies sin migración versionada. ");
+            message.append("No reemplaces subsistemas enteros cuando baste una corrección localizada. No afirmes haber compilado, ejecutado o probado si no existe un resultado real.\n\n");
+            int contextBudget = Math.max(1800, Math.min(6500, activeContextSize * 2));
+            message.append(minefadeWorkspace.buildContext(prompt, contextBudget));
+            message.append("\n\nCONTRATO DE CAMBIOS MULTIARCHIVO:\n");
+            message.append("Si se necesita cambiar código, termina con exactamente un bloque <minefade-change-set>JSON</minefade-change-set>. ");
+            message.append("JSON: action=edit_files, summary y files (1 a 12 elementos). ");
+            message.append("Para archivos existentes se prefieren patches: [{find,replace,occurrence?}]. find debe ser un fragmento literal exacto y corto; occurrence solo si hay varias coincidencias. No reescribas archivos enteros cuando baste un parche. ");
+            message.append("Usa content solo para archivos nuevos o cuando un parche exacto no sea razonable. Cada content debe ser el archivo completo. ");
+            message.append("Respeta rutas relativas reales, no edites secretos ni configuración de firma y modifica solo lo necesario. No incluyas Markdown dentro del JSON. ");
+            message.append("Si falta contexto o no puedes señalar fragmentos exactos, solicita leer los archivos y no generes una propuesta.\n");
         } else {
-            message.append("No hay proyecto seleccionado. Puedes explicar, planificar o responder, pero no propongas cambios de archivos.\n");
+            message.append("Eres GameForge AI, un asistente experto en desarrollo de videojuegos Android. ");
+            message.append("Responde en español, da pasos concretos y no afirmes haber modificado archivos si no lo has hecho.\n");
         }
-
         try {
             JSONArray history = new JSONArray(historyJson == null ? "[]" : historyJson);
             int first = Math.max(0, history.length() - 4);
@@ -538,23 +690,43 @@ public class MainActivity extends Activity {
                 if (item == null) continue;
                 String role = "user".equals(item.optString("role")) ? "Usuario" : "Asistente";
                 String content = item.optString("content", "");
-                if (content.length() > 350) content = content.substring(0, 350);
+                if (content.length() > 320) content = content.substring(0, 320);
                 message.append(role).append(": ").append(content).append("\n");
             }
         } catch (JSONException ignored) {
             message.append("\nNo se pudo recuperar el historial anterior.\n");
         }
-
-        message.append("\nPETICIÓN ACTUAL:\n").append(prompt == null ? "" : prompt).append("\n\n");
-        message.append("Si hace falta cambiar un archivo y tienes suficiente contexto, termina con exactamente un bloque estructurado de este formato. ");
-        message.append("El contenido debe ser JSON válido, con saltos de línea escapados dentro de content:\n");
-        message.append("<gameforge-edit>{\"action\":\"edit_file\",\"path\":\"scripts/player.gd\",\"summary\":\"Explica brevemente el cambio\",\"content\":\"CONTENIDO COMPLETO DEL ARCHIVO\"}</gameforge-edit>\n");
-        message.append("No uses ese bloque para sugerencias hipotéticas, no generes más de un archivo por respuesta y nunca escribas contraseñas, claves ni datos personales en el proyecto.");
+        message.append("\nPETICIÓN ACTUAL:\n").append(prompt == null ? "" : prompt);
         return message.toString();
     }
 
     private void attachEditProposal(JSONObject response, String answer) {
         if (answer == null) return;
+        String batchOpen = "<minefade-change-set>";
+        String batchClose = "</minefade-change-set>";
+        int batchStart = answer.indexOf(batchOpen);
+        int batchEnd = batchStart < 0 ? -1 : answer.indexOf(batchClose, batchStart + batchOpen.length());
+        if (batchStart >= 0 && batchEnd > batchStart) {
+            String json = answer.substring(batchStart + batchOpen.length(), batchEnd).trim();
+            try {
+                JSONObject proposal = new JSONObject(json);
+                JSONArray files = proposal.optJSONArray("files");
+                if ("edit_files".equals(proposal.optString("action")) && files != null
+                        && files.length() >= 1 && files.length() <= 8) {
+                    response.put("batchProposal", proposal);
+                    response.put("answer", (answer.substring(0, batchStart)
+                            + answer.substring(batchEnd + batchClose.length())).trim());
+                    return;
+                }
+            } catch (JSONException ignored) { }
+            try {
+                response.put("answer", (answer.substring(0, batchStart)
+                        + answer.substring(batchEnd + batchClose.length())).trim()
+                        + "\n\nLa propuesta multiarchivo llegó mal formada; no se ha cambiado ningún archivo.");
+                response.put("error", true);
+            } catch (JSONException ignored) { }
+            return;
+        }
         String open = "<gameforge-edit>";
         String close = "</gameforge-edit>";
         int start = answer.indexOf(open);
@@ -572,6 +744,7 @@ public class MainActivity extends Activity {
             try {
                 response.put("answer", (answer.substring(0, start) + answer.substring(end + close.length())).trim()
                         + "\n\nLa propuesta de archivo llegó mal formada; no se ha cambiado ningún archivo.");
+                response.put("error", true);
             } catch (JSONException ignored) { }
         }
     }
@@ -595,7 +768,18 @@ public class MainActivity extends Activity {
             if (activityManager != null) activityManager.getMemoryInfo(memoryInfo);
             info.put("ramMb", (int) (memoryInfo.totalMem / (1024 * 1024)));
             info.put("freeStorageMb", (int) (getFilesDir().getUsableSpace() / (1024 * 1024)));
-            info.put("projectAgentTools", projectWorkspace != null);
+            info.put("projectAgentTools", projectWorkspace != null && minefadeWorkspace != null);
+            info.put("bootstrapRunning", bundledBootstrapRunning);
+            info.put("bootstrapStatus", bootstrapStatus);
+            info.put("minefadeProjectReady", minefadeProjectReady || (minefadeWorkspace != null && minefadeWorkspace.isReady()));
+            info.put("minefadeSourceFiles", minefadeWorkspace == null ? 0 : minefadeWorkspace.getStatus().optInt("sourceFiles", 0));
+            info.put("builtinModel", true);
+            info.put("modelName", "Qwen2.5-Coder-0.5B-Instruct Q3_K_M");
+            info.put("activeContextSize", activeContextSize);
+            info.put("activeThreadCount", activeThreadCount);
+            info.put("availableRamMb", (int) (memoryInfo.availMem / (1024 * 1024)));
+            info.put("lowMemoryDevice", memoryInfo.lowMemory);
+            info.put("generationRunning", generationRunning.get());
         } catch (JSONException ignored) { }
         return info;
     }
@@ -637,7 +821,8 @@ public class MainActivity extends Activity {
             return;
         }
         File project = new File(projectsRoot(), projectId);
-        if (!project.isDirectory() || !new File(project, "project.godot").isFile()) {
+        if (!project.isDirectory() || (!new File(project, "project.godot").isFile()
+                && !new File(project, "gameforge-project.json").isFile())) {
             toast("No se encontró el proyecto.");
             return;
         }
@@ -680,18 +865,38 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String getProjects() { return listProjects().toString(); }
         @JavascriptInterface public String getModels() { return listModels().toString(); }
         @JavascriptInterface public String getRuntimeStatus() { return runtimeStatus().toString(); }
+        @JavascriptInterface public void cancelGeneration() { cancelCurrentGeneration(); }
+        @JavascriptInterface public String getProjectChangeHistory(String projectId) {
+            return "minefade".equals(projectId) ? minefadeWorkspace.getChangeHistory().toString()
+                    : "{\"ok\":true,\"tasks\":[],\"count\":0}";
+        }
         @JavascriptInterface public String createProject(String name, String type, String prompt) { return MainActivity.this.createProject(name, type, prompt).toString(); }
         @JavascriptInterface public void askAsync(String prompt, String historyJson, String projectId, String requestId) {
             MainActivity.this.askAsync(prompt, historyJson, projectId, requestId);
         }
         @JavascriptInterface public void loadModel(String fileName, String requestId) { loadModelAsync(fileName, requestId); }
         @JavascriptInterface public void unloadModel() { modelExecutor.execute(LocalLlmRuntime::unloadModel); }
-        @JavascriptInterface public String listProjectFiles(String projectId) { return projectWorkspace.listFiles(projectId).toString(); }
-        @JavascriptInterface public String readProjectFile(String projectId, String path) { return projectWorkspace.readFile(projectId, path).toString(); }
-        @JavascriptInterface public String previewProjectEdit(String projectId, String proposalJson) { return projectWorkspace.previewEdit(projectId, proposalJson).toString(); }
+        @JavascriptInterface public String listProjectFiles(String projectId) {
+            return "minefade".equals(projectId) ? minefadeWorkspace.listFiles().toString() : projectWorkspace.listFiles(projectId).toString();
+        }
+        @JavascriptInterface public String readProjectFile(String projectId, String path) {
+            return "minefade".equals(projectId) ? minefadeWorkspace.readFile(path).toString() : projectWorkspace.readFile(projectId, path).toString();
+        }
+        @JavascriptInterface public String previewProjectEdit(String projectId, String proposalJson) {
+            return "minefade".equals(projectId) ? minefadeWorkspace.previewBatch(proposalJson).toString() : projectWorkspace.previewEdit(projectId, proposalJson).toString();
+        }
         @JavascriptInterface public String applyProjectEdit(String previewId) { return projectWorkspace.applyEdit(previewId).toString(); }
         @JavascriptInterface public String cancelProjectEdit(String previewId) { return projectWorkspace.cancelEdit(previewId).toString(); }
-        @JavascriptInterface public String undoLastProjectEdit(String projectId) { return projectWorkspace.undoLast(projectId).toString(); }
+        @JavascriptInterface public String undoLastProjectEdit(String projectId) {
+            return "minefade".equals(projectId) ? minefadeWorkspace.undoLast().toString() : projectWorkspace.undoLast(projectId).toString();
+        }
+        @JavascriptInterface public String searchProjectFiles(String query, int limit) { return minefadeWorkspace.searchFiles(query, limit).toString(); }
+        @JavascriptInterface public String previewProjectBatchEdit(String projectId, String proposalJson) {
+            if (!"minefade".equals(projectId)) return "{\"ok\":false,\"error\":\"Las propuestas multiarchivo están limitadas al proyecto Minefade.\"}";
+            return minefadeWorkspace.previewBatch(proposalJson).toString();
+        }
+        @JavascriptInterface public String applyProjectBatchEdit(String previewId) { return minefadeWorkspace.applyBatch(previewId).toString(); }
+        @JavascriptInterface public String cancelProjectBatchEdit(String previewId) { return minefadeWorkspace.cancelBatch(previewId).toString(); }
         @JavascriptInterface public void exportProject(String id) { runOnUiThread(() -> startExport(id)); }
         @JavascriptInterface public void importModel() {
             runOnUiThread(() -> {

@@ -3,7 +3,7 @@ name: Build GameForge AI APK
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, gameforge-minefade-phase1-2 ]
   pull_request:
     branches: [ main ]
 
@@ -31,7 +31,6 @@ jobs:
       - name: Check offline coding agent safety
         run: python scripts/check-phase2.py
       - name: Check Minefade-specific Phase 1 and 2 integration
-        if: github.event_name == 'pull_request'
         run: python scripts/check-gameforge-phase12.py
       - name: Validate JavaScript syntax
         run: bash scripts/check-js.sh
@@ -64,12 +63,10 @@ jobs:
         with:
           gradle-version: '9.9.1'
       - name: Prepare bundled Minefade source and offline AI model
-        if: github.event_name == 'pull_request'
         run: bash scripts/prepare-bundled-assets.sh
       - name: Verify bundled model and Minefade snapshot
-        if: github.event_name == 'pull_request'
         run: python3 scripts/check-bundled-assets.py
-      - name: Assemble debug APK with bundled llama.cpp
+      - name: Assemble debug APK with bundled llama.cpp and GGUF
         run: gradle --no-daemon --stacktrace -p android assembleDebug
       - name: Verify APK contents and package metadata
         run: |
@@ -77,9 +74,6 @@ jobs:
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging android/app/build/outputs/apk/debug/app-debug.apk | grep "package: name='com.gameforgeai.studio'"
           unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -E 'lib/arm64-v8a/libgameforge_llama.so'
           unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -E 'lib/x86_64/libgameforge_llama.so'
-      - name: Verify built-in Minefade and GGUF assets in PR APK
-        if: github.event_name == 'pull_request'
-        run: |
           unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -E 'assets/models/qwen2.5-coder-0.5b-instruct-q3_k_m.gguf'
           unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -E 'assets/builtin/minefade-source.zip'
       - name: Upload APK
@@ -88,7 +82,7 @@ jobs:
           name: gameforge-ai-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
       - name: Smoke test on Android 12 emulator
         timeout-minutes: 45
         uses: reactivecircus/android-emulator-runner@v2

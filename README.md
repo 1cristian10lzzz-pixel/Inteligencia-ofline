@@ -1,63 +1,64 @@
-# GameForge AI — estudio de creación de videojuegos Android offline
+# GameForge AI — Minefade Studio
 
-**Versión:** 0.4.0-alpha. **APK debug:** compilado y publicado por GitHub Actions el 19 de noviembre de 2026.
+**Versión en desarrollo:** 0.6.0-alpha. Las fases 1 y 2 están implementadas en esta rama; esta revisión debe completar CI antes de considerarse un APK validado.
 
-GameForge AI es una aplicación Android nativa diseñada para trabajar sin servicios de IA en la nube. No declara permiso `android.permission.INTERNET`.
+GameForge AI es un estudio Android offline dedicado al desarrollo de Minefade. Incluye un modelo GGUF Qwen2.5-Coder-0.5B-Instruct Q3_K_M, un snapshot local del proyecto Minefade 2.0 y herramientas nativas para inspeccionar fuentes y aplicar cambios revisables.
 
-## Funciones incluidas
+## Experiencia del estudio
 
-- Interfaz Android local y almacenamiento privado.
-- Motor nativo `llama.cpp` enlazado mediante JNI.
-- Importación de modelos GGUF desde el dispositivo.
-- Carga del modelo y generación de texto en un hilo de trabajo.
-- Inicialización diferida de llama.cpp para que el arranque no cargue JNI.
-- Recuperación de fallos de WebView y diagnóstico local de inicio.
-- Bibliotecas nativas incluidas para `arm64-v8a` y `x86_64`.
-- Creación de proyectos Godot a partir de plantillas 2D y supervivencia 3D.
-- Exportación de proyectos fuente como ZIP.
-- Historial local de conversación para mantener el contexto reciente.
-- Agente de código offline con contexto del proyecto seleccionado.
-- Explorador local de archivos de texto y lectura protegida.
-- Propuestas de edición con vista previa, aprobación explícita, copias de seguridad y deshacer.
-- Icono de aplicación adaptativo con un cubo voxel sobre un yunque neural.
+- Inicio con estado del modelo, proyecto, archivos indexados y tareas.
+- Proyectos y conversaciones separadas por proyecto.
+- Chat local con cancelación de generación, historial y propuestas de cambios.
+- Agente Minefade con diagnósticos para render, chunks, jugador, entidades, mundo, LAN y rendimiento.
+- Explorador de fuentes, búsqueda local y lectura de archivos.
+- Historial de tareas, transacciones y restauración.
+- Centro de compilación que distingue explícitamente las funciones aún pendientes de la fase 3.
+- Configuración del modelo, memoria, espacio disponible y runtime.
 
-## Descargas
+## IA incluida y funcionamiento offline
 
-El APK de prueba está publicado en GitHub Actions, en el artefacto `gameforge-ai-debug-apk` de la ejecución de compilación. El archivo generado es `app-debug.apk`.
+El archivo GGUF viene dentro del APK y se copia automáticamente al almacenamiento privado durante el primer arranque. No necesitas importar ningún modelo para empezar a usar la IA. El motor llama.cpp se carga en segundo plano y el estado de la interfaz solo cambia a «IA local preparada» cuando el runtime confirma que el modelo está disponible.
 
-## Preparar el funcionamiento offline
+Modelo incluido: **Qwen2.5-Coder-0.5B-Instruct Q3_K_M** (aprox. 355 MB). Es una variante pequeña para dispositivos móviles; no tiene la capacidad de un modelo grande de ingeniería. La especialización en Minefade también depende del contexto de fuentes, documentación y herramientas nativas. La IA puede equivocarse: revisa las propuestas antes de aplicarlas.
 
-1. Instala el APK.
-2. Descarga una sola vez un modelo GGUF compatible con el hardware y la RAM del teléfono (por ejemplo, una versión instruct pequeña y cuantizada).
-3. Abre la sección **IA local y dispositivo** e importa ese archivo GGUF.
-4. Carga el modelo. Una vez guardado localmente, el chat de IA no necesita conexión a internet.
+La inferencia no necesita Internet y el manifiesto Android no declara el permiso INTERNET. La descarga de modelos y del snapshot ocurre durante el proceso de construcción del APK en CI, no al abrir la aplicación.
 
-El modelo GGUF no va embebido en el APK para evitar que la instalación pese cientos de MB. Debes revisar la licencia del modelo que elijas. La inferencia de esta versión usa CPU; GPU/NPU todavía no están habilitadas.
+## Trabajo con el código de Minefade
 
-## Límites importantes de 0.4.0-alpha
+- El snapshot de Minefade 2.0 se incluye dentro del APK y se instala en `files/projects/minefade`.
+- El workspace limita el acceso al directorio del proyecto y a una lista de extensiones de texto.
+- Los archivos sensibles y la configuración de firma están protegidos.
+- El agente puede proponer transacciones de hasta 12 archivos.
+- Para modificar código existente se prefieren parches exactos `find/replace`, con rechazo de coincidencias ambiguas.
+- Los cambios se muestran antes/después, se validan de forma estructural y requieren aprobación.
+- Al aplicar, se comprueban los hashes actuales y se crean copias de seguridad.
+- El historial permite deshacer la última transacción completa. Si los archivos cambiaron después, la restauración se rechaza para no perder trabajo.
+- Se puede detener una generación sin cerrar la aplicación.
 
-- Esta versión incluye un runtime local real de llama.cpp, pero todavía debe probarse la inferencia con un GGUF concreto en el teléfono de destino.
-- El agente puede proponer una edición de un archivo de texto por operación. La propuesta requiere aprobación explícita; las rutas y extensiones están limitadas y se crea una copia de seguridad antes de aplicar el cambio.
-- La aplicación crea y exporta proyectos Godot fuente; no contiene el editor Godot ni compila todavía el APK del videojuego dentro de GameForge AI. Para editar/exportar el juego se abre el proyecto en Godot o Godot Android Editor.
-- El APK es de depuración firmado con la clave debug de CI. Es instalable para pruebas, pero no es una versión de distribución ni tiene una clave de lanzamiento permanente.
+Las comprobaciones locales de JSON/XML y delimitadores son preventivas; no sustituyen los compiladores C++, Rust o Android ni las pruebas del videojuego.
 
-## Compilación reproducible
+## Compilación y fase 3
 
-Requisitos de CI: JDK 17, Android SDK Platform 36, Build Tools 36.0.0, NDK 29.0.14206865, CMake 3.31.6 y Gradle 9.9.1. Durante el build, CMake obtiene la revisión fijada de llama.cpp.
+El APK de GameForge AI se construye en GitHub Actions para ARM64 y x86_64 e incluye el motor llama.cpp, el GGUF y el snapshot de Minefade.
 
-```bash
-python3 scripts/validate_source.py
-bash scripts/check-js.sh
-gradle --no-daemon -p android assembleDebug
-```
+GameForge AI **todavía no genera por sí misma el APK final del videojuego Minefade**. La fase 3 deberá incorporar una conexión de compilación autenticada, ejecutar Gradle/CMake/NDK/Rust, probar el juego, firmar Release con una clave persistente y devolver el APK y sus diagnósticos. No se incrustan contraseñas ni tokens en la aplicación.
 
-Salida: `android/app/build/outputs/apk/debug/app-debug.apk`.
+## Validación
 
-## Licencias y seguridad
+CI comprueba:
+- Estructura y seguridad de las fuentes.
+- Rutas, tipos de archivo y protecciones del agente.
+- Parches, comparación, transacciones y restauración.
+- Sintaxis JavaScript de las interfaces.
+- Presencia y SHA-256 del modelo, CRC del snapshot y contenido del APK.
+- Arranque Android 12, carga del GGUF y una inferencia de autodiagnóstico con contexto largo.
 
-- llama.cpp se incorpora bajo su licencia MIT.
-- Los modelos GGUF no se redistribuyen; revisa las licencias de sus autores.
-- No guardes claves privadas ni contraseñas en el repositorio.
-- La aplicación no solicita permiso de Internet ni requiere una API key.
+La prueba en emulador no sustituye una evaluación del consumo, temperatura y calidad del modelo en el teléfono físico del usuario.
 
-Consulta [BUILD_STATUS.md](BUILD_STATUS.md), [docs/architecture.md](docs/architecture.md) y [el plan de mejoras en tres fases](docs/ROADMAP-3-PHASES.md).
+## Licencias
+
+- llama.cpp / ggml: MIT.
+- Qwen2.5-Coder-0.5B-Instruct: Apache-2.0 según su tarjeta de modelo; se incluye el archivo de licencia.
+- Se conservan los avisos de las dependencias presentes en la instantánea de Minefade.
+
+Consulta `BUILD_STATUS.md`, `docs/PHASE-1-2-MINEFADE.md` y `docs/UX-ARCHITECTURE-0.6.md`.
