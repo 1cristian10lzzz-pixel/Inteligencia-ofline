@@ -152,6 +152,7 @@ public final class MinefadeProjectWorkspace {
     public synchronized String buildContext(String task, int requestedLimit) {
         try {
             requireReady();
+            int contextLimit = Math.max(1800, Math.min(MAX_CONTEXT_CHARS, requestedLimit));
             JSONArray listing = new JSONArray();
             collectFiles(root, root, listing, 0);
             List<String> paths = new ArrayList<>();
@@ -168,7 +169,6 @@ public final class MinefadeProjectWorkspace {
                 out.append("- ").append(path).append('\n');
             }
 
-            int contextLimit = Math.max(1800, Math.min(MAX_CONTEXT_CHARS, requestedLimit));
             String lower = task == null ? "" : task.toLowerCase(Locale.ROOT);
             List<String> preferred = new ArrayList<>();
             preferred.add("README.md");
